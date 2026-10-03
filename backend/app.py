@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Tripwire", lifespan=lifespan)
+app = FastAPI(title="Fast and Fraudless", lifespan=lifespan)
 for mod in (agent_api, calls, integrations):
     if mod and hasattr(mod, "router"):
         app.include_router(mod.router)
@@ -77,7 +77,8 @@ for mod in (agent_api, calls, integrations):
 @app.get("/api/health")
 def health():
     return {"ok": True, "uptime_s": round(time.time() - STARTED), "restored": _restored["value"],
-            "modules": {"agent_api": bool(agent_api), "agent_bridge": bool(agent_bridge), "calls": bool(calls)}}
+            "modules": {"agent_api": bool(agent_api), "agent_bridge": bool(agent_bridge), "calls": bool(calls),
+                        "integrations": bool(integrations)}}
 
 
 @app.get("/api/state")
