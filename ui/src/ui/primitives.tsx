@@ -53,20 +53,25 @@ type Tone = 'neutral' | 'accent' | 'hold' | 'verify' | 'clear'
 
 const TONE: Record<Tone, string> = {
   neutral: 'outline-line-2 text-ink-2',
-  accent: 'outline-accent text-accent',
-  hold: 'outline-hold text-hold',
-  verify: 'outline-verify text-verify',
-  clear: 'outline-clear text-clear',
+  accent: 'outline-accent/60 bg-accent/10 text-accent',
+  hold: 'outline-hold/60 bg-hold/10 text-hold',
+  verify: 'outline-verify/60 bg-verify/10 text-verify',
+  clear: 'outline-clear/60 bg-clear/10 text-clear',
 }
 
+/** Badge: a slanted racing decal in condensed caps. Pass className "font-mono" for ids (kept upright). */
 export function Chip({ tone = 'neutral', children, className, title }: {
   tone?: Tone; children: ReactNode; className?: string; title?: string
 }) {
+  const mono = /(^|\s)font-mono(\s|$)/.test(className ?? '')
   return (
     <span
       title={title}
       className={cx(
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-0.5 text-meta outline-1 -outline-offset-1 outline-solid',
+        'inline-flex items-center gap-1.5 whitespace-nowrap outline-1 -outline-offset-1 outline-solid',
+        mono
+          ? 'rounded-lg px-2.5 py-0.5 text-meta'
+          : 'decal trim-cap rounded-sm px-3 py-1.5 font-num text-body font-semibold uppercase leading-none tracking-[0.06em]',
         TONE[tone],
         className,
       )}
@@ -93,9 +98,9 @@ export function Stat({ value, label, den, size = 'title', note, className }: {
   const [v, d] = STAT[size]
   return (
     <div className={cx('flex flex-col gap-2', className)}>
-      <div className="tnum flex items-baseline gap-2 font-bold">
-        <span className={v}>{value}</span>
-        {den != null && <span className={cx(d, 'font-semibold text-mute')}>/ {den}</span>}
+      <div className="tnum flex items-baseline gap-2 font-num font-bold leading-none">
+        <span className={cx(v, 'leading-none')}>{value}</span>
+        {den != null && <span className={cx(d, 'font-semibold leading-none text-mute')}>/ {den}</span>}
       </div>
       <div className="text-body text-ink-2">{label}</div>
       {note != null && note !== '' && <div className="text-meta text-mute">{note}</div>}
@@ -137,7 +142,7 @@ export function CountUp({ value, format, className }: {
       el.textContent = fmt.current(value)
     }
   }, [value])
-  return <span ref={ref} className={cx('tnum', className)} />
+  return <span ref={ref} className={cx('tnum font-num', className)} />
 }
 
 /** Entrance group: fade and rise 12px. order 1 starts 120 ms after order 0. */
@@ -159,7 +164,7 @@ export function Empty({ title, sub, children, className }: {
 }) {
   return (
     <div className={cx('col-span-full flex h-full flex-col items-center justify-center gap-4 text-center', className)}>
-      <div className="text-title font-bold">{title}</div>
+      <div className="font-race text-title">{title}</div>
       {sub != null && <div className="text-body text-ink-2">{sub}</div>}
       {children != null && <div className="mt-4">{children}</div>}
     </div>

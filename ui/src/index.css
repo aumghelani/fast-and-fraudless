@@ -2,25 +2,28 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 
-/* Calm palette: dark neutral base, one blue accent. Red, amber and green only for decisions. */
+/* Fast and Fraudless: asphalt base, carbon panels, chrome text, one nitro-blue accent.
+   Red, amber and green only for decisions. Racing fonts only for the wordmark, titles, numbers and badges. */
 @theme static {
   --font-sans: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --font-race: "Racing Sans One", "Inter Variable", "Segoe UI", system-ui, sans-serif;
+  --font-num: "Teko", "Inter Variable", "Segoe UI", system-ui, sans-serif;
 
-  --color-bg: #0b0d10;
-  --color-surface: #121519;
-  --color-surface-2: #181c21;
-  --color-line: #23282f;
-  --color-line-2: #2f3540;
-  --color-ink: #edeff2;
+  --color-bg: #0a0c0f;
+  --color-surface: #12151a;
+  --color-surface-2: #171b21;
+  --color-line: #242a32;
+  --color-line-2: #313843;
+  --color-ink: #d7dce3;
   --color-ink-2: #a9b0ba;
   --color-mute: #7a828e;
   --color-faint: #3a414b;
-  --color-accent: #8ab4ff;
-  --color-hold: #f0524f;
-  --color-hold-fill: #d93a37;
-  --color-verify: #f2b544;
-  --color-clear: #3dd68c;
+  --color-accent: #19b5fe;
+  --color-hold: #ff2d3d;
+  --color-hold-fill: #d3182a;
+  --color-verify: #ffb000;
+  --color-clear: #22d37a;
 
   /* old names, so untouched files still render */
   --color-panel: var(--color-surface);
@@ -69,6 +72,38 @@ html {
 
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* the wordmark is the one logo size outside the type scale */
+.wordmark {
+  font-size: 1.875rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+/* chrome lettering for the wordmark */
+.chrome-text {
+  background: linear-gradient(180deg, #f4f6f9 0%, #9aa3af 55%, #e6eaef 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 0.04em rgb(5 7 10 / 0.85);
+  paint-order: stroke fill;
+}
+
+/* a faint nitro-blue edge, static */
+.nitro-edge {
+  filter: drop-shadow(0 0 0.3rem color-mix(in srgb, var(--color-accent) 35%, transparent));
+}
+
+/* racing-decal slant for rail steps and badges */
+.decal {
+  transform: skewX(-8deg);
+}
+
+/* trims a line box to cap height so condensed caps sit centred in a badge */
+.trim-cap {
+  text-box: trim-both cap alphabetic;
 }
 
 .grid-12 {
