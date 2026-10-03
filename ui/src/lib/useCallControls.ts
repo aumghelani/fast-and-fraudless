@@ -33,6 +33,18 @@ export function useCallControls() {
     }
   }, [])
 
+  // a refresh or closed tab ends the call this page started, so the box never keeps a "live" call nobody hears
+  useEffect(() => {
+    const onHide = () => {
+      const id = callId.current
+      if (!id || modeRef.current === 'idle') return
+      const url = `/api/calls/${encodeURIComponent(id)}/end`
+      if (!navigator.sendBeacon?.(url)) fetch(url, { method: 'POST', keepalive: true }).catch(() => {})
+    }
+    window.addEventListener('pagehide', onHide)
+    return () => window.removeEventListener('pagehide', onHide)
+  }, [])
+
   const stopLocal = useCallback(async () => {
     if (mic.current) {
       mic.current.stop() // flushes the tail chunk into sendChain
