@@ -26,8 +26,8 @@ as the call guard, so a payment message and a phone call get the same decision f
   Bank systems (bank network)                        Dell Pro Max GB10 (on-prem, air-gap capable)
  ┌───────────────────────────┐                     ┌───────────────────────────────────────────────────────┐
  │ Payment hub / wire room   │── pacs.008 ────────▶│ backend :8790  /api/integrations                      │
- │                           │◀─ RING_MATCH/CLEAR ─│   parse ISO 20022 → calls.payee_check → rules.decide   │
- ├───────────────────────────┤                     │   (payee_check reads the GPU ring map, Mongo `rings`)  │
+ │                           │◀─ RING_MATCH/CLEAR ─│   parse ISO 20022 → calls.payee_check → rules.decide  │
+ ├───────────────────────────┤                     │   (payee_check reads the GPU ring map, Mongo `rings`) │
  │ Online / corporate banking│── pain.001 ────────▶│                                                       │
  ├───────────────────────────┤                     │ Mongo 8.2: inbound_payments, inbound_transactions,    │
  │ Core banking batch        │── CSV / JSON ──────▶│   webhook_deliveries, decisions (audit trail)         │
@@ -294,6 +294,20 @@ curl -s $BOX/api/integrations/health
 # Webhooks: set the URL and secret, restart the backend, then watch the delivery log
 #   ~/tw/secrets/integrations.env:  TW_WEBHOOKS=http://10.20.30.40:8443/aml/inbound
 #                                    TW_WEBHOOK_SECRET=<random 32+ bytes>
+```
+
+A stand-in for the case-management system, for a demo on the box itself
+(`TW_WEBHOOKS=http://127.0.0.1:9009/hook`). It prints each signed event and answers 204:
+
+```bash
+python3 -c '
+import http.server as h
+class H(h.BaseHTTPRequestHandler):
+    def do_POST(s):
+        body = s.rfile.read(int(s.headers["Content-Length"]))
+        print(s.headers["X-FastFraudless-Event"], s.headers["X-FastFraudless-Signature"], body.decode(), flush=True)
+        s.send_response(204); s.end_headers()
+h.HTTPServer(("127.0.0.1", 9009), H).serve_forever()'
 ```
 
 Replace `SAR-R-102` with a SAR id the box has (`GET /api/state` lists them under `sars`). If
