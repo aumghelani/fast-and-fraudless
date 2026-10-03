@@ -212,7 +212,7 @@ function setOnline(on: boolean) {
   offlineTimer = undefined
   send('net', { online: on })
   // the box reports its own net state; keep the fake one until 'online'
-  if (!on) offlineTimer = window.setInterval(() => send('net', { online: false }), 1000)
+  if (!on) offlineTimer = window.setInterval(() => send('net', { online: false }), 250)
 }
 
 function restored() {

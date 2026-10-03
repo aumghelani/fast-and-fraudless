@@ -50,7 +50,7 @@ export function StepRail() {
         const dot = story.dots[s.id]
         return (
           <div key={s.id} className="flex items-center">
-            {i > 0 && <span aria-hidden className="decal mx-1 h-4 w-px bg-line-2" />}
+            {i > 0 && <span aria-hidden className="decal h-4 w-px bg-line-2" />}
             <button
               ref={(el) => {
                 items.current[i] = el
@@ -65,8 +65,11 @@ export function StepRail() {
               <span className="decal flex items-center gap-2 pt-1">
                 <span className={on ? 'font-bold text-accent' : 'font-semibold opacity-70'}>{i + 1}</span>
                 <span className={on ? 'font-bold' : 'font-semibold'}>{s.label}</span>
-                {seen && <Check aria-label="visited" className="-mt-1 h-3.5 w-3.5 text-mute" strokeWidth={2.5} />}
               </span>
+              {/* the check sits in the step's own padding so a visited rail is no wider */}
+              {seen && (
+                <Check aria-label="visited" className="absolute top-1/2 right-0.5 h-2.5 w-2.5 -translate-y-1/2 text-mute" strokeWidth={3} />
+              )}
               {dot && !on && (
                 <span
                   aria-label="new"

@@ -54,7 +54,7 @@ export function Header() {
   const { productName, bankName } = useBranding()
   const dataOut = useStore((s) => s.counters?.customer_data_out)
   return (
-    <header className="relative z-20 flex h-18 shrink-0 items-center justify-between gap-6 border-b border-line bg-bg px-12">
+    <header className="relative z-20 flex h-18 shrink-0 items-center justify-between gap-5 border-b border-line bg-bg px-12">
       {/* the brand group keeps its natural width so it never runs into the rail at 1440 */}
       <div className="flex flex-1 items-center gap-3">
         <Mark />
@@ -63,11 +63,11 @@ export function Header() {
         <Chip className="ml-1">Synthetic data</Chip>
       </div>
       <StepRail />
-      <div className="flex flex-1 items-center justify-end gap-6">
+      <div className="flex flex-1 items-center justify-end gap-4">
         <NetStatus />
         <span aria-hidden className="decal h-8 w-px bg-line-2" />
         <div className="flex flex-col items-end gap-1">
-          <span className="text-meta text-mute">Customer data sent out</span>
+          <span className="whitespace-nowrap text-meta text-mute">Customer data sent out</span>
           <span className="tnum font-num text-title font-bold leading-none">{num(dataOut)}</span>
         </div>
       </div>
