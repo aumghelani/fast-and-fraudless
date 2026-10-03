@@ -127,6 +127,15 @@ class Sink:
             self.db = MongoClient(uri, serverSelectionTimeoutMS=5000)["tripwire"]
             self.db.command("ping")
 
+    def reset(self):
+        """Fresh replay: clear worker-owned state (and the agent's derived state for those rings)."""
+        if self.db is None:
+            return
+        for c in ("rings", "transactions", "cases", "sar_drafts"):
+            self.db[c].delete_many({})
+        self.db.meta.delete_many({"_id": {"$in": ["tick", "eval_rings", "worker"]}})
+        self.db.watch_state.delete_many({"_id": {"$in": ["rings_agent"]}})
+
     def meta(self, _id: str, doc: dict):
         if self.db is not None:
             self.db.meta.update_one({"_id": _id}, {"$set": doc}, upsert=True)
@@ -134,10 +143,8 @@ class Sink:
     def ring(self, ring: dict, txns: list[dict], is_new: bool):
         if self.db is None:
             return
-        if is_new:
-            self.db.rings.insert_one(ring)
-        else:
-            self.db.rings.update_one({"_id": ring["_id"]}, {"$set": {k: v for k, v in ring.items() if k != "_id"}})
+        # idempotent: safe across worker restarts (insert on first sight, update afterwards)
+        self.db.rings.replace_one({"_id": ring["_id"]}, ring, upsert=True)
         if txns:
             from pymongo import UpdateOne
             self.db.transactions.bulk_write(
@@ -165,6 +172,9 @@ def run(args):
     log(f"{len(attempts):,} labelled attempts; {at['txn_row'].notna().mean():.1%} of their txns matched")
 
     sink = Sink(None if args.dry_run else args.mongo)
+    if args.reset:
+        sink.reset()
+        log("reset: cleared rings/transactions/cases/sar_drafts/tick/eval")
     sink.meta("worker", {"status": "running", "mode": "gpu" if ON_GPU else "cpu", "rows": int(len(df)),
                          "load_s": round(load_s, 2), "started": datetime.now(timezone.utc)})
 
@@ -226,7 +236,7 @@ def run(args):
             txns = [{"_id": e["txn_id"], "ring_id": ring_id, **{k: e[k] for k in
                      ("src", "dst", "amount", "currency", "usd", "ts")}} for e in edges]
             sink.ring(ring, txns, is_new)
-            if is_new and not args.quiet:
+            if is_new and not args.quiet and tier == "escalate":
                 log(f"{ring_id} {kind} hub={hub} accounts={len(accounts)} txns={len(edges)} "
                     f"labelled={ring['labelled_share']:.0%} sim={cursor:%Y-%m-%d %H:%M}")
 
@@ -298,6 +308,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="no Mongo, no sleeping: sweep the data and print eval")
     ap.add_argument("--dry-step-hours", type=float, default=12)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--reset", action="store_true", help="clear worker-owned Mongo state before replaying")
     run(ap.parse_args())
 
 
