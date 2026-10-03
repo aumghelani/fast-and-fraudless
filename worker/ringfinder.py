@@ -8,6 +8,7 @@ What it does (see ARCHITECTURE.md section 6):
   * replays the bank's transactions in time order on a simulated clock
   * every cycle, detects fan-in / fan-out rings in the trailing window on the GPU
   * writes rings, their transactions, tick, eval and bench docs to MongoDB
+  * resumes from Mongo after a crash (default unless --reset); --loop stays alive after the data ends
 Deterministic code only: no model is involved in detection.
 """
 from __future__ import annotations
@@ -36,6 +37,10 @@ USD = {"US Dollar": 1.0, "Euro": 1.09, "Yuan": 0.14, "Yen": 0.0068, "UK Pound": 
 
 def log(*a):
     print(f"[ringfinder {'GPU' if ON_GPU else 'CPU'} {time.strftime('%H:%M:%S')}]", *a, flush=True)
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------- loading
@@ -134,11 +139,11 @@ def _host_groups(e: pd.DataFrame, key: str):
 class Sink:
     """Writes to MongoDB, or just records in memory when --dry-run."""
 
-    def __init__(self, uri: str | None):
+    def __init__(self, uri: str | None, db_name: str = "tripwire"):
         self.db = None
         if uri:
             from pymongo import MongoClient
-            self.db = MongoClient(uri, serverSelectionTimeoutMS=5000)["tripwire"]
+            self.db = MongoClient(uri, serverSelectionTimeoutMS=5000)[db_name]
             self.db.command("ping")
 
     def reset(self):
@@ -148,21 +153,76 @@ class Sink:
         for c in ("rings", "transactions", "cases", "sar_drafts"):
             self.db[c].delete_many({})
         self.db.meta.delete_many({"_id": {"$in": ["tick", "eval_rings", "worker"]}})
-        self.db.watch_state.delete_many({"_id": {"$in": ["rings_agent"]}})
+        self.db.watch_state.delete_many({"_id": {"$in": ["rings_agent", "ringfinder"]}})
 
-    def meta(self, _id: str, doc: dict):
+    def meta(self, _id: str, doc: dict, inc: dict | None = None):
         if self.db is not None:
-            self.db.meta.update_one({"_id": _id}, {"$set": doc}, upsert=True)
+            upd = {"$set": doc, **({"$inc": inc} if inc else {})}
+            self.db.meta.update_one({"_id": _id}, upd, upsert=True)
 
-    def ring(self, ring: dict, txns: list[dict], is_new: bool):
+    def ring(self, ring: dict, txns: list[dict], is_new: bool, esc: bool = False):
         if self.db is None:
             return
         # idempotent: safe across worker restarts (insert on first sight, update afterwards)
         self.db.rings.replace_one({"_id": ring["_id"]}, ring, upsert=True)
         if txns:
             from pymongo import UpdateOne
+            # esc: row was written by an escalated ring (never unset), so a resume restores the escalated set
             self.db.transactions.bulk_write(
-                [UpdateOne({"_id": t["_id"]}, {"$set": t}, upsert=True) for t in txns], ordered=False)
+                [UpdateOne({"_id": t["_id"]}, {"$set": {**t, "esc": True} if esc else t}, upsert=True)
+                 for t in txns], ordered=False)
+
+    def checkpoint(self, cursor: pd.Timestamp, hubs: list):
+        """Hub episodes still inside the window ([hub, ring_id, sim ns]): makes a resume exact."""
+        if self.db is not None:
+            self.db.watch_state.replace_one({"_id": "ringfinder"}, {"replay_time": cursor.isoformat(),
+                                                                   "hubs": hubs}, upsert=True)
+
+    def load_state(self, rows: int, lab_by_row: np.ndarray) -> dict | None:
+        """Resume point: cursor, ring counter, rings, hub episodes, flagged/escalated rows and label counters."""
+        if self.db is None:
+            return None
+        tick = self.db.meta.find_one({"_id": "tick"}) or {}
+        worker = self.db.meta.find_one({"_id": "worker"}) or {}
+        if not tick.get("replay_time"):
+            return None
+        if worker.get("rows") not in (None, rows):
+            log(f"not resuming: Mongo holds a run over {worker.get('rows')} rows, data has {rows} (use --reset)")
+            return None
+        rings, hub_episode, counter, esc_ids = {}, {}, 0, set()
+        for r in self.db.rings.find({}, {"hub": 1, "sim_time": 1, "tier": 1, "found_at": 1}):
+            rid = str(r["_id"])
+            rings[rid] = {"found_at": r.get("found_at"), "tier": r.get("tier")}
+            if rid.startswith("R-") and rid[2:].isdigit():
+                counter = max(counter, int(rid[2:]))
+            if r.get("tier") == "escalate":
+                esc_ids.add(rid)
+            hub, st = r.get("hub"), r.get("sim_time")
+            if hub and st:
+                st = pd.Timestamp(st)
+                if hub not in hub_episode or st > hub_episode[hub][1]:
+                    hub_episode[hub] = (rid, st)
+        ck = self.db.watch_state.find_one({"_id": "ringfinder"}) or {}
+        seen_ns = {h: (rid, int(ns)) for h, rid, ns in ck.get("hubs") or []}
+        for h, (rid, ns) in seen_ns.items():   # the latest of last detection and last write wins
+            if h not in hub_episode or pd.Timestamp(ns) > hub_episode[h][1]:
+                hub_episode[h] = (rid, pd.Timestamp(ns))
+        exact = bool(worker.get("esc_flags"))   # older runs: approximate escalated rows by the ring's tier
+        flagged, escalated = [], []
+        for t in self.db.transactions.find({}, {"ring_id": 1, "esc": 1}):
+            tid = str(t["_id"])
+            if not (tid.startswith("T") and tid[1:].isdigit()) or int(tid[1:]) >= rows:
+                continue
+            flagged.append(int(tid[1:]))
+            if (t.get("esc") if exact else t.get("ring_id") in esc_ids):
+                escalated.append(int(tid[1:]))
+        fl = np.unique(np.asarray(flagged, dtype="int64"))
+        es = np.unique(np.asarray(escalated, dtype="int64"))
+        return {"cursor": pd.Timestamp(tick["replay_time"]), "counter": counter, "rings": rings,
+                "hub_episode": hub_episode, "seen_ns": seen_ns,
+                "flagged_rows": set(fl.tolist()), "escalated_rows": set(es.tolist()),
+                "flagged_lab": [int(lab_by_row[fl].sum()), int(len(fl))],
+                "escalated_lab": [int(lab_by_row[es].sum()), int(len(es))], "exact": exact}
 
 
 def to_host(df: pd.DataFrame) -> pd.DataFrame:
@@ -175,6 +235,8 @@ def run(args):
     t0 = time.time()
     name = os.path.basename(args.data.rstrip("/\\")).replace("ibm-aml-", "")
     prefix = {"hi-medium": "HI-Medium", "hi-small": "HI-Small"}.get(name.lower(), name)
+    sink = Sink(None if args.dry_run else args.mongo, args.db)
+    sink.meta("worker", {"status": "loading", "heartbeat": utcnow(), "pid": os.getpid()})
     df = load_transactions(os.path.join(args.data, f"{prefix}_Trans.csv"))
     load_s = time.time() - t0
     log(f"loaded {len(df):,} transactions in {load_s:.1f}s")
@@ -185,28 +247,85 @@ def run(args):
     att_type = at.groupby("attempt")["type"].first()
     log(f"{len(attempts):,} labelled attempts; {at['txn_row'].notna().mean():.1%} of their txns matched")
 
-    sink = Sink(None if args.dry_run else args.mongo)
+    state, restore_s = None, 0.0
     if args.reset:
         sink.reset()
         log("reset: cleared rings/transactions/cases/sar_drafts/tick/eval")
-    sink.meta("worker", {"status": "running", "mode": "gpu" if ON_GPU else "cpu", "rows": int(len(df)),
-                         "load_s": round(load_s, 2), "started": datetime.now(timezone.utc)})
+    elif sink.db is not None:   # resume is the default; --resume only makes it explicit
+        r0 = time.time()
+        lab = np.zeros(len(df), dtype="int8")
+        lab[np.asarray(df["txn_row"].to_numpy())] = np.asarray(df["is_laundering"].to_numpy())
+        state = sink.load_state(int(len(df)), lab)
+        restore_s = time.time() - r0
+    worker = {"status": "running", "mode": "gpu" if ON_GPU else "cpu", "rows": int(len(df)), "data": prefix,
+              "load_s": round(load_s, 2), "started": utcnow(), "heartbeat": utcnow(), "pid": os.getpid()}
+    if state:
+        sink.meta("worker", {**worker, "resumed_from": state["cursor"].isoformat(), "resumed_at": utcnow()},
+                  inc={"resumes": 1})
+    else:
+        sink.meta("worker", {**worker, "esc_flags": True})   # this run writes the esc flag from the start
 
     ts_np = df["ts"].values if not hasattr(df["ts"], "to_numpy") else df["ts"].to_numpy()
     start, end = pd.Timestamp(ts_np[0]), pd.Timestamp(ts_np[-1])
     window = pd.Timedelta(days=args.window_days)
-    cursor = start + window if args.dry_run else start
+    stepped = args.dry_run or args.step_hours > 0    # fixed sim steps, no sleeping
+    step_h = args.dry_step_hours if args.dry_run else args.step_hours
+    cursor = start + window if stepped else start
     flagged_rows: set[int] = set()
     escalated_rows: set[int] = set()
     flagged_lab, escalated_lab = [0, 0], [0, 0]   # [labelled laundering, total] running counts (no 32M scans)
     rings: dict[str, dict] = {}       # hub+episode -> ring doc
     hub_episode: dict[str, tuple[str, pd.Timestamp]] = {}
     counter = 0
-    last_n, last_t = 0, time.time()
+    if state:
+        cursor, counter, rings, hub_episode = state["cursor"], state["counter"], state["rings"], state["hub_episode"]
+        flagged_rows, escalated_rows = state["flagged_rows"], state["escalated_rows"]
+        flagged_lab, escalated_lab = state["flagged_lab"], state["escalated_lab"]
+        log(f"resumed at sim {cursor:%Y-%m-%d %H:%M}: {len(rings):,} rings (last R-{counter:03d}), "
+            f"{len(flagged_rows):,} flagged rows{'' if state['exact'] else ' (escalated rows approximated)'}, "
+            f"restored in {restore_s:.1f}s")
+    elif sink.db is not None and not args.reset:
+        log("nothing to resume: fresh replay")
+    seen_ns = state["seen_ns"] if state else {}   # hub -> (ring id, last detection ns) inside the window
+    win_ns = int(window.value)
+    last_n = int(np.searchsorted(ts_np, np.datetime64(cursor), side="right")) if state else 0
+    last_t, last_cursor = time.time(), cursor
     cycle_times = []
 
+    def evaluate(cursor):
+        """eval_rings doc (honest: only attempts that have fully happened by now) + raw precisions."""
+        done = att_last_ts[att_last_ts <= cursor].index
+        sub = at[at["attempt"].isin(done)]
+        if len(sub):
+            hit = sub["txn_row"].isin(np.fromiter(flagged_rows, dtype="int64", count=len(flagged_rows)))
+            share = hit.groupby(sub["attempt"]).mean()
+            recovered = int((share >= 0.5).sum())
+            by_type = {}
+            for typ, grp in share.groupby(att_type.reindex(share.index)):
+                by_type[str(typ)] = [int((grp >= 0.5).sum()), int(len(grp))]
+        else:
+            recovered, by_type = 0, {}
+        precision_all = flagged_lab[0] / flagged_lab[1] if flagged_lab[1] else None
+        precision = escalated_lab[0] / escalated_lab[1] if escalated_lab[1] else None
+        if len(sub):
+            esc_arr = np.fromiter(escalated_rows, dtype="int64", count=len(escalated_rows))
+            recovered_esc = int((sub["txn_row"].isin(esc_arr).groupby(sub["attempt"]).mean() >= 0.5).sum())
+        else:
+            recovered_esc = 0
+        doc = {"rings_recovered": recovered, "rings_total": int(len(done)),
+               "rings_total_all": len(attempts), "by_type": by_type,
+               "flagged_precision": None if precision is None else round(precision, 3),
+               "flagged_precision_all": None if precision_all is None else round(precision_all, 3),
+               "rings_recovered_escalated": recovered_esc,
+               "rings_found": len(rings),
+               "rings_escalated": sum(1 for r in rings.values() if r.get("tier") == "escalate"),
+               "sim_time": cursor.isoformat()}
+        return doc, precision, precision_all
+
+    ev = None
     while cursor <= end + pd.Timedelta(minutes=1):
         c0 = time.time()
+        cur_ns = int(cursor.value)
         n = int(np.searchsorted(ts_np, np.datetime64(cursor), side="right"))
         processed = df.iloc[:n]
         lo = int(np.searchsorted(ts_np, np.datetime64(cursor - window), side="left"))
@@ -224,6 +343,7 @@ def run(args):
             rows = [int(r) for r in g["txn_row"].tolist()]
             new_rows = [r for r in rows if r not in flagged_rows]
             is_new = ring_id not in rings
+            seen_ns[hub] = (ring_id, cur_ns)
             if not is_new and not new_rows:
                 continue
             for r_, lab_ in zip(rows, g["is_laundering"].tolist()):
@@ -255,58 +375,63 @@ def run(args):
             rings[ring_id] = ring
             txns = [{"_id": e["txn_id"], "ring_id": ring_id, **{k: e[k] for k in
                      ("src", "dst", "amount", "currency", "usd", "ts")}} for e in edges]
-            sink.ring(ring, txns, is_new)
+            sink.ring(ring, txns, is_new, esc=tier == "escalate")
             if is_new and not args.quiet and tier == "escalate":
                 log(f"{ring_id} {kind} hub={hub} accounts={len(accounts)} txns={len(edges)} "
                     f"labelled={ring['labelled_share']:.0%} sim={cursor:%Y-%m-%d %H:%M}")
 
-        # ---- eval (honest: only attempts that have fully happened by now)
-        done = att_last_ts[att_last_ts <= cursor].index
-        sub = at[at["attempt"].isin(done)]
-        if len(sub):
-            hit = sub["txn_row"].isin(np.fromiter(flagged_rows, dtype="int64", count=len(flagged_rows)))
-            share = hit.groupby(sub["attempt"]).mean()
-            recovered = int((share >= 0.5).sum())
-            by_type = {}
-            for typ, grp in share.groupby(att_type.reindex(share.index)):
-                by_type[str(typ)] = [int((grp >= 0.5).sum()), int(len(grp))]
-        else:
-            recovered, by_type = 0, {}
-        precision_all = flagged_lab[0] / flagged_lab[1] if flagged_lab[1] else None
-        precision = escalated_lab[0] / escalated_lab[1] if escalated_lab[1] else None
-        if len(sub):
-            esc_arr = np.fromiter(escalated_rows, dtype="int64", count=len(escalated_rows))
-            recovered_esc = int((sub["txn_row"].isin(esc_arr).groupby(sub["attempt"]).mean() >= 0.5).sum())
-        else:
-            recovered_esc = 0
-        sink.meta("eval_rings", {"rings_recovered": recovered, "rings_total": int(len(done)),
-                                 "rings_total_all": len(attempts), "by_type": by_type,
-                                 "flagged_precision": None if precision is None else round(precision, 3),
-                                 "flagged_precision_all": None if precision_all is None else round(precision_all, 3),
-                                 "rings_recovered_escalated": recovered_esc,
-                                 "rings_found": len(rings),
-                                 "rings_escalated": sum(1 for r in rings.values() if r.get("tier") == "escalate"),
-                                 "sim_time": cursor.isoformat()})
+        ev, precision, precision_all = evaluate(cursor)
+        sink.meta("eval_rings", ev)
+        if sink.db is not None:   # checkpoint before the tick, so it is never older than the resume cursor
+            for h in [h for h, (_, ns) in seen_ns.items() if ns < cur_ns - win_ns]:
+                del seen_ns[h]
+            sink.checkpoint(cursor, [[h, r, ns] for h, (r, ns) in seen_ns.items()])
 
         cycle_times.append(time.time() - c0)
         now = time.time()
         sink.meta("tick", {"tx_total": n, "tx_per_sec": round((n - last_n) / max(now - last_t, 1e-6), 1),
-                           "replay_time": cursor.isoformat(), "cycle_s": round(cycle_times[-1], 3)})
-        last_n, last_t = n, now
+                           "replay_time": cursor.isoformat(), "cycle_s": round(cycle_times[-1], 3),
+                           "status": "replay"})
+        sink.meta("worker", {"status": "running", "heartbeat": utcnow(), "sim_time": cursor.isoformat()})
+        last_n, last_t, last_cursor = n, now, cursor
+        if args.max_cycles and len(cycle_times) >= args.max_cycles:
+            log(f"--max-cycles {args.max_cycles}: hard exit (resume test)")
+            os._exit(3)
 
-        if args.dry_run:
-            cursor += pd.Timedelta(hours=args.dry_step_hours)
+        if stepped:
+            cursor += pd.Timedelta(hours=step_h)
         else:
             time.sleep(max(0.0, args.cycle_s - (time.time() - c0)))
             cursor += pd.Timedelta(seconds=args.speed * max(time.time() - c0, args.cycle_s))
 
     total = time.time() - t0
-    log(f"done: {len(rings)} rings ({sum(1 for r in rings.values() if r.get('tier') == 'escalate')} escalated), "
-        f"recovered {recovered}/{len(done)} (escalated-only {recovered_esc}), precision escalated {precision} all {precision_all}, "
-        f"by_type {by_type}, avg cycle {np.mean(cycle_times):.2f}s, total {total:.1f}s")
+    if ev is None:   # resumed after the end of the data
+        ev, precision, precision_all = evaluate(last_cursor)
+    avg_cycle = float(np.mean(cycle_times)) if cycle_times else 0.0
+    log(f"done: {ev['rings_found']} rings ({ev['rings_escalated']} escalated), "
+        f"recovered {ev['rings_recovered']}/{ev['rings_total']} (escalated-only {ev['rings_recovered_escalated']}), "
+        f"precision escalated {precision} all {precision_all}, "
+        f"by_type {ev['by_type']}, avg cycle {avg_cycle:.2f}s, total {total:.1f}s")
+    if args.loop and not args.dry_run:
+        live_idle(sink, args.idle_s, last_n, last_cursor, total)
     sink.meta("worker", {"status": "finished", "total_s": round(total, 1)})
-    return {"rings": len(rings), "recovered": recovered, "total": int(len(done)), "precision": precision,
-            "by_type": by_type, "load_s": load_s, "avg_cycle_s": float(np.mean(cycle_times)), "total_s": total}
+    return {"rings": ev["rings_found"], "recovered": ev["rings_recovered"], "total": ev["rings_total"],
+            "precision": precision, "by_type": ev["by_type"], "load_s": load_s, "avg_cycle_s": avg_cycle,
+            "total_s": total}
+
+
+def live_idle(sink: Sink, idle_s: float, tx_total: int, cursor, total_s: float):
+    """Data exhausted: stay alive and keep tick + heartbeat fresh for the UI and the supervisor."""
+    log(f"end of data: live-idle (tick + heartbeat every {idle_s:.0f}s)")
+    sink.meta("worker", {"status": "live-idle", "total_s": round(total_s, 1)})
+    while True:
+        try:
+            sink.meta("tick", {"tx_total": int(tx_total), "tx_per_sec": 0.0, "replay_time": cursor.isoformat(),
+                               "cycle_s": 0.0, "status": "live-idle"})
+            sink.meta("worker", {"status": "live-idle", "heartbeat": utcnow()})
+        except Exception as e:   # Mongo blip: keep idling, the supervisor watches the heartbeat
+            log(f"idle write failed: {e}")
+        time.sleep(idle_s)
 
 
 def run_bench(args):
@@ -326,7 +451,7 @@ def run_bench(args):
     t_detect = time.time() - t1
     total = time.time() - t0
     log(f"BENCH {mode}: rows={len(df):,} load={t_load:.1f}s detect={t_detect:.1f}s total={total:.1f}s rings={len(rings)}")
-    sink = Sink(None if args.dry_run else args.mongo)
+    sink = Sink(None if args.dry_run else args.mongo, args.db)
     sink.meta("bench", {"rows": int(len(df)), f"{mode}_s": round(total, 1), f"{mode}_load_s": round(t_load, 1),
                         f"{mode}_detect_s": round(t_detect, 1)})
 
@@ -351,7 +476,15 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--bench", action="store_true", help="time load + one full detection pass, write meta.bench")
     ap.add_argument("--reset", action="store_true", help="clear worker-owned Mongo state before replaying")
+    ap.add_argument("--resume", action="store_true", help="continue from Mongo state (the default without --reset)")
+    ap.add_argument("--loop", action="store_true", help="after the data ends stay alive (tick status live-idle)")
+    ap.add_argument("--idle-s", type=float, default=5, help="live-idle tick/heartbeat period")
+    ap.add_argument("--db", default=os.environ.get("TW_DB", "tripwire"), help="Mongo database (tests use another)")
+    ap.add_argument("--step-hours", type=float, default=0, help="fixed sim step per cycle, no sleeping (tests)")
+    ap.add_argument("--max-cycles", type=int, default=0, help="hard exit after N cycles (resume tests)")
     a = ap.parse_args()
+    if a.reset and a.resume:
+        ap.error("--reset and --resume are exclusive")
     run_bench(a) if a.bench else run(a)
 
 
