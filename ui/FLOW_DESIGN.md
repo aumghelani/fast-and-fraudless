@@ -403,7 +403,7 @@ useRing(id?: string|null): Ring|undefined   // store ring, else GET /api/rings/{
 summariseError(msg?: string): string         // "Agent run failed · will retry"
 // flow/CtlProvider.tsx
 useCtl(): Omit<CallControls,'level'>         // mode, error, micMode, replay, startMicCall, toggleMic, end, audioEl
-// shell
+// shell (a non-string headline, e.g. Decision's top strip, renders as-is; body is a .grid-12)
 SceneFrame({ headline, subline?, actions?, children })   StartTray({ compact? })
 // ui/primitives.tsx
 Button({ variant:'primary'|'ghost'|'hold'; size?:'md'|'lg'; kbd?: string; ...buttonProps })
@@ -416,6 +416,7 @@ VERDICT: Record<Verdict,{ title: string; short: string; color: string /* css var
 EASE; DUR = { fast: .2, base: .4, slow: .6 };  prefersReducedMotion(); usePrefersReducedMotion()
 // store State additions
 story; exfil; watchdog?; integration?; integrations (newest first, max 10); branding?
+egressBaseKey?  // largest egress _k after the first hydrate: rows above it arrived "in this session"
 // scene modules (registry.ts imports these exact names; no props)
 WatchingScene, WatchingDetails, MapLayer({ active }), CallScene, CallDetails, DecisionScene, DecisionDetails,
 InvestigationScene, InvestigationDetails, ProofScene, ProofDetails, ResultsScene, ResultsDetails
@@ -434,7 +435,7 @@ InvestigationScene, InvestigationDetails, ProofScene, ProofDetails, ResultsScene
 
 **Testing without real calls** (dev only):
 - `window.__ffInject(msg)` applies an SSE message.
-- `window.__ffLocal(patch)` calls `patchLocal`.
+- `window.__ffLocal(patch)` calls `patchLocal`, and `window.__ffGo(sceneId)` calls `goTo`.
 - `window.__ffDemo('margaret'|'david'|'sar'|'denied'|'offline'|'restored'|'healed')` plays timed fixture sequences.
   The call fixtures set `activeCallId` so they count as "this screen started it".
 - Real replays: at most 2 per agent.
