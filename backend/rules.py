@@ -85,8 +85,9 @@ def decide(cues: list[dict], customer: dict, amount: float | None, payee_check: 
     if in_ring:
         hops = payee_check.get("hops")
         where = "is the hub of" if hops == 1 else "feeds"
-        hold_why.append(f"Payee {payee_check.get('payee_account') or ''} {where} ring "
-                        f"{payee_check.get('ring_id')} found by the GPU ring finder".replace("Payee  ", "Payee "))
+        acct = payee_check.get("payee_account")
+        payee = f"Payee {acct}" if acct else "Payee"
+        hold_why.append(f"{payee} {where} ring {payee_check.get('ring_id')} found by the GPU ring finder")
     if len(high) >= 2:
         hold_why.append(f"{len(high)} high-risk cues: {', '.join(high)}")
     if first_wire and ratio is not None and ratio >= RATIO_HOLD and high:
