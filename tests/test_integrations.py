@@ -141,6 +141,14 @@ def test_pacs008_without_namespace_iban():
     assert t["settlement_date"] == "2026-10-02"   # from GrpHdr
 
 
+def test_pacs008_inside_business_envelope():
+    doc = PACS_PLAIN.split(b"?>", 1)[1]
+    env = (b'<BizMsgEnvlp><AppHdr xmlns="urn:iso:std:iso:20022:tech:xsd:head.001.001.02"><BizMsgIdr>B-1</BizMsgIdr>'
+           b'<MsgDefIdr>pacs.008.001.08</MsgDefIdr></AppHdr>' + doc + b"</BizMsgEnvlp>")
+    m = integ.parse_iso20022(env)
+    assert m["kind"] == "pacs.008" and m["message_id"] == "M-1" and len(m["transactions"]) == 1
+
+
 def test_pain001_sample_iban_and_othr():
     m = integ.parse_iso20022(sample("pain001_example.xml"))
     assert (m["kind"], m["version"], m["message_id"]) == ("pain.001", "pain.001.001.09", "HT-PAY-20261003-01")
