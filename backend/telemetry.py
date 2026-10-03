@@ -1,8 +1,4 @@
-"""GB10 telemetry (1 Hz) and network state (online/offline) published on the bus.
-
-nvidia-smi reports memory as N/A on the GB10's unified memory, so memory comes from /proc/meminfo
-(pattern from SquidWard runtime.py / Anchor telemetry.py, see STACK_GUIDE §13).
-"""
+"""GB10 telemetry (nvidia-smi + /proc/meminfo) and online/offline state, published every second."""
 from __future__ import annotations
 
 import socket
