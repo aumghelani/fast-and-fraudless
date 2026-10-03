@@ -23,7 +23,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from . import rules
+from . import priority, rules
 from .bus import bus
 from .config import settings
 from .cues import parse_amount, perceive
@@ -328,6 +328,7 @@ def _commit(c: Call, seg: np.ndarray) -> None:
 
 def feed(c: Call, samples: np.ndarray) -> dict:
     """Append audio; cut every full window (at a pause) -> ASR; refresh the partial transcript."""
+    priority.mark_call_activity()   # live call: background investigations wait (priority.py)
     W = settings.asr_window_s
     committed = False
     with c.audio_lock:

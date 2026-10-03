@@ -24,7 +24,7 @@ import threading
 import time
 
 from .bus import bus
-from . import nemoclaw_cli
+from . import nemoclaw_cli, priority
 from .config import settings
 from .db import db, load_token, now_ms, save_token
 
@@ -283,6 +283,9 @@ def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0
 def _worker(n: int) -> None:
     while True:
         prio, _, ring_id, reason, t_q = _q.get()
+        waited = priority.wait_until_quiet()   # real-time first: never start an investigation mid-call
+        if waited > 1:
+            log(f"{ring_id}: waited {waited:.0f} s for a live call to finish")
         try:
             run_agent(ring_id, reason, time.time() - t_q)
         except Exception as e:

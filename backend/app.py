@@ -7,6 +7,8 @@ from __future__ import annotations
 import asyncio
 import os
 import importlib
+import json
+import logging
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -20,6 +22,7 @@ from . import counters, egress, telemetry, worker_feed
 from .bus import bus
 from .config import settings
 
+logging.basicConfig(level=logging.INFO, format="[%(name)s] %(levelname)s %(message)s")
 STARTED = time.time()
 _restored = {"value": False}
 
@@ -90,6 +93,16 @@ async def events():
             yield f"data: {line}\n\n"
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/rings/{ring_id}")
+def get_ring(ring_id: str):
+    """One ring (any tier), e.g. the payee's ring for the 3-D map during a call."""
+    from .db import db
+    doc = db().rings.find_one({"_id": ring_id})
+    if not doc:
+        return JSONResponse({"error": "unknown ring"}, status_code=404)
+    return JSONResponse(json.loads(json.dumps(worker_feed.ring_payload(doc), default=str)))
 
 
 @app.post("/api/demo/exfil")
