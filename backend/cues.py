@@ -125,13 +125,26 @@ def extract_cues_keywords(transcript: str) -> list[dict]:
 
 
 def perceive(transcript: str, use_llm: bool = True) -> tuple[list[dict], str]:
-    """(cues, source) with source "llm" or "keywords-fallback"."""
+    """(cues, source). Two independent readers, union of cues (MEDPASS-style multi-reader perception).
+
+    Measured on the box (first eval run, Nemotron alone): 4/5 scams caught, 0/5 false holds; the miss
+    (CALL-03, tech-support refund) was a perception miss: "today" and "Microsoft support" were in the
+    transcript but not extracted. The deterministic keyword reader catches those. Both readers only
+    perceive (every cue keeps a verbatim quote); rules.py still makes the decision.
+    Sources: "llm+keywords", or "keywords-fallback" when the LLM is unreachable."""
+    kw = extract_cues_keywords(transcript)
     if use_llm:
         try:
-            return extract_cues(transcript), "llm"
+            llm = extract_cues(transcript)
         except LLMError as e:
             log.warning("LLM cue extraction failed, using keyword fallback: %s", e)
-    return extract_cues_keywords(transcript), "keywords-fallback"
+            return kw, "keywords-fallback"
+        seen = {c["cue"] for c in llm}
+        merged = llm + [dict(c, reader="keywords") for c in kw if c["cue"] not in seen]
+        for c in llm:
+            c.setdefault("reader", "llm")
+        return merged, "llm+keywords"
+    return kw, "keywords-fallback"
 
 
 # ---------------------------------------------------------------- amount parsing (for calls without a scenario)
