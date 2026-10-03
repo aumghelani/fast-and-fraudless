@@ -4,19 +4,25 @@ Everything stays on the box. Screening reuses calls.payee_check (GPU ring map) a
 """
 import csv
 import hashlib
+import heapq
 import hmac
 import io
+import ipaddress
+import itertools
 import json
 import math
 import os
 import re
+import socket
 import threading
+import time
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -24,7 +30,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from .bus import bus
-from .db import db, now
+from .db import db, load_token, now, save_token
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 
@@ -514,11 +520,306 @@ async def post_transactions(request: Request, dry_run: bool = False):
     return result
 
 
-# ---------------------------------------------------------------- outbound webhooks (filled in below)
+# ---------------------------------------------------------------- outbound webhooks (signed, retried, logged)
+EVENTS = ("hold_recommended", "sar_drafted", "sar_decided", "ring_escalated")
+RETRY_CODES = {408, 425, 429}
+MAX_QUEUE = 5000
+WATCH_KEY = "integrations_webhooks"
+SIG_HEADER = "X-FastFraudless-Signature"
+
+
+def sign(body: bytes, secret: str) -> str:
+    """Signature header value: sha256=<hex HMAC-SHA256 of the raw body>."""
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def verify(body: bytes, secret: str, header: str) -> bool:
+    """Receiver-side check, constant time."""
+    return hmac.compare_digest(sign(body, secret), header or "")
+
+
+def backoff(attempts: int) -> float:
+    """Seconds before the next try: 1, 2, 4 ... capped at 60."""
+    return float(min(60, 2 ** max(0, attempts - 1)))
+
+
+def _redact(url: str) -> str:
+    """scheme://host[:port]/path, without credentials or query."""
+    u = urlsplit(url)
+    host = (u.hostname or "") + (f":{u.port}" if u.port else "")
+    return f"{u.scheme}://{host}{u.path}"
+
+
+def _url_id(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:12]
+
+
+def is_internal(url: str, resolve=socket.getaddrinfo) -> bool:
+    """True if every address of the URL's host is non-global (private, loopback, link-local)."""
+    host = urlsplit(url).hostname or ""
+    try:
+        ips = [ipaddress.ip_address(host)]
+    except ValueError:
+        ips = [ipaddress.ip_address(str(ai[4][0]).split("%")[0]) for ai in resolve(host, None)]
+    return bool(ips) and all(not (ip.is_global or ip.is_multicast or ip.is_unspecified) for ip in ips)
+
+
+def webhook_config() -> dict:
+    """URLs from TW_WEBHOOKS (all events) or config/integrations.json; secret only from TW_WEBHOOK_SECRET."""
+    cfg = _read_json(Path(os.environ.get("TW_INTEGRATIONS_FILE") or CONFIG_DIR / "integrations.json")) or {}
+    env = [u.strip() for u in os.environ.get("TW_WEBHOOKS", "").split(",") if u.strip()]
+    if env:
+        hooks = [{"url": u, "events": list(EVENTS)} for u in env]
+    else:
+        hooks = []
+        for h in cfg.get("webhooks") or []:
+            h = {"url": h} if isinstance(h, str) else (h if isinstance(h, dict) else {})
+            if h.get("url"):
+                hooks.append({"url": str(h["url"]).strip(),
+                              "events": [e for e in (h.get("events") or EVENTS) if e in EVENTS]})
+    good = []
+    for h in hooks:
+        u = urlsplit(h["url"])
+        if u.scheme in ("http", "https") and u.hostname:
+            good.append(h)
+        else:
+            _log(f"ignoring webhook URL (need http/https and a host): {_redact(h['url'])}")
+    return {"hooks": good, "secret": os.environ.get("TW_WEBHOOK_SECRET", ""),
+            "allow_public": os.environ.get("TW_WEBHOOKS_ALLOW_PUBLIC", "") == "1" or cfg.get("allow_public_ips") is True,
+            "max_attempts": int(cfg.get("max_attempts") or 8), "timeout_s": float(cfg.get("timeout_s") or 5),
+            "base_url": os.environ.get("TW_PUBLIC_BASE_URL") or str(cfg.get("public_base_url") or "")}
+
+
+def _links(event: str, data: dict, base: str) -> dict:
+    """Where the receiver pulls detail (over the bank network); bodies carry ids and status only."""
+    p, out = "/api/integrations", {}
+    if data.get("sar_id"):
+        out.update(sar_json=f"{p}/sar/{data['sar_id']}.json", sar_xml=f"{p}/sar/{data['sar_id']}/fincen.xml")
+    if data.get("call_id"):
+        out["call"] = f"/api/calls/{data['call_id']}"
+    if data.get("ring_id"):
+        out["ring"] = f"/api/rings/{data['ring_id']}"
+    return {k: base.rstrip("/") + v for k, v in out.items()}
+
+
+def events_from_change(ch: dict) -> list:
+    """(event, dedupe key, data) for one change-stream document from calls, sar_drafts or rings."""
+    coll = (ch.get("ns") or {}).get("coll")
+    doc = ch.get("fullDocument") or {}
+    rid = doc.get("_id")
+    if not rid:
+        return []
+    if coll == "calls" and doc.get("recommendation") == "HOLD":
+        pc = doc.get("payee_check") or {}
+        return [("hold_recommended", f"hold:call:{rid}:{doc.get('started_at')}",
+                 {"source": "call", "call_id": rid, "recommendation": "HOLD", "payee_in_ring": bool(pc.get("in_ring")),
+                  "ring_id": pc.get("ring_id"), "hops": pc.get("hops"),
+                  "cues": sorted({c.get("cue") for c in doc.get("cues") or [] if c.get("cue")}),
+                  "banker_decision": doc.get("banker_decision"), "synthetic": bool(doc.get("synthetic"))})]
+    if coll == "sar_drafts":
+        cits = doc.get("citations") or []
+        base = {"sar_id": rid, "ring_id": doc.get("ring_id"), "revision": doc.get("revision"),
+                "valid_all": bool(doc.get("valid_all")), "citations_total": len(cits),
+                "citations_verified": sum(1 for c in cits if c.get("valid"))}
+        gen = doc.get("received_at_ms")
+        out = []
+        if ch.get("operationType") in ("insert", "replace"):
+            out.append(("sar_drafted", f"sar_drafted:{rid}:r{doc.get('revision')}:{gen}", base))
+        if doc.get("decision") in ("approved", "rejected"):
+            out.append(("sar_decided", f"sar_decided:{rid}:{doc['decision']}:{gen}",
+                        {**base, "decision": doc["decision"], "decided_by": doc.get("decided_by"),
+                         "decided_at": _iso(doc.get("decided_at"))}))
+        return out
+    if coll == "rings" and doc.get("tier") == "escalate":
+        return [("ring_escalated", f"ring:{rid}:{_iso(doc.get('found_at'))}",
+                 {"ring_id": rid, "type": doc.get("type"), "tier": "escalate",
+                  "n_accounts": len(doc.get("accounts") or []), "n_txns": doc.get("n_txns") or len(doc.get("edges") or []),
+                  "found_at": _iso(doc.get("found_at")), "sim_time": doc.get("sim_time")})]
+    return []
+
+
+def _http_post(url: str, body: bytes, headers: dict, timeout: float) -> int:
+    import httpx
+    # no proxies from the environment, no redirects: only the configured bank-internal URL is contacted
+    with httpx.Client(trust_env=False, follow_redirects=False, timeout=timeout) as c:
+        return c.post(url, content=body, headers=headers).status_code
+
+
+class Webhooks:
+    """Signed delivery with retry and backoff; every attempt is logged in Mongo `webhook_deliveries`."""
+
+    def __init__(self, cfg: dict, post: Optional[Callable] = None, coll=None, resolve=socket.getaddrinfo):
+        self.cfg, self.post, self._coll, self.resolve = cfg, post or _http_post, coll, resolve
+        self.heap: list = []
+        self.cv = threading.Condition()
+        self.seq = itertools.count()
+        self.last: Optional[dict] = None
+
+    def coll(self):
+        return self._coll if self._coll is not None else db().webhook_deliveries
+
+    def payload(self, event: str, key: str, data: dict) -> bytes:
+        body = {"event": event, "event_id": hashlib.sha256(key.encode()).hexdigest()[:24], "ts": now().isoformat(),
+                "source": "fast-and-fraudless", "bank": branding()["bank_name"], "data": data,
+                "links": _links(event, data, self.cfg.get("base_url") or "")}
+        return json.dumps(body, separators=(",", ":"), sort_keys=True, default=str).encode()
+
+    def emit(self, event: str, key: str, data: dict) -> int:
+        """Queue one event for each subscribed URL. Returns deliveries created (0 if already sent)."""
+        n, body = 0, None
+        for h in self.cfg["hooks"]:
+            if event not in h["events"]:
+                continue
+            body = body or self.payload(event, key, data)
+            did = hashlib.sha256(f"{key}|{h['url']}".encode()).hexdigest()[:32]
+            try:
+                self.coll().insert_one({"_id": did, "event": event, "key": key, "url": _redact(h["url"]),
+                                        "url_id": _url_id(h["url"]), "status": "pending", "attempts": 0,
+                                        "created_at": now(), "body": body.decode()})
+            except DuplicateKeyError:
+                continue   # already queued or sent
+            except PyMongoError as e:
+                _log(f"delivery log unavailable, {event} not queued: {type(e).__name__}")
+                continue
+            self._push(0.0, did, h["url"], event, body, 0)
+            n += 1
+        return n
+
+    def _push(self, delay: float, did: str, url: str, event: str, body: bytes, attempts: int) -> None:
+        with self.cv:
+            if len(self.heap) >= MAX_QUEUE:
+                full = True
+            else:
+                full = False
+                heapq.heappush(self.heap, (time.time() + delay, next(self.seq), did, url, event, body, attempts))
+                self.cv.notify()
+        if full:
+            self._record(did, "dropped", attempts, "queue full", None)
+
+    def queued(self) -> int:
+        with self.cv:
+            return len(self.heap)
+
+    def attempt(self, url: str, event: str, did: str, body: bytes) -> tuple:
+        """One POST. Returns (ok, retryable, detail)."""
+        if not self.cfg.get("allow_public"):
+            try:
+                if not is_internal(url, self.resolve):
+                    return False, False, "destination is not bank-internal (TW_WEBHOOKS_ALLOW_PUBLIC=1 allows it)"
+            except OSError as e:
+                return False, True, f"DNS: {e}"[:200]
+        headers = {"Content-Type": "application/json", "User-Agent": "FastFraudless-Webhooks/1",
+                   "X-FastFraudless-Event": event, "X-FastFraudless-Delivery": did,
+                   SIG_HEADER: sign(body, self.cfg["secret"])}
+        try:
+            code = int(self.post(url, body, headers, self.cfg.get("timeout_s", 5)))
+        except Exception as e:  # noqa: BLE001 - network errors are retried
+            return False, True, f"{type(e).__name__}: {e}"[:200]
+        if 200 <= code < 300:
+            return True, False, f"HTTP {code}"
+        return False, code >= 500 or code in RETRY_CODES, f"HTTP {code}"
+
+    def deliver(self, did: str, url: str, event: str, body: bytes, attempts: int) -> str:
+        """Try once; reschedule with backoff or finish. Returns the new status."""
+        t0 = time.time()
+        ok, retry, detail = self.attempt(url, event, did, body)
+        attempts += 1
+        status = ("delivered" if ok else
+                  "pending" if retry and attempts < self.cfg.get("max_attempts", 8) else "failed")
+        self._record(did, status, attempts, detail, round((time.time() - t0) * 1000))
+        self.last = {"event": event, "url": _redact(url), "status": status, "detail": detail,
+                     "attempts": attempts, "at": now().isoformat()}
+        if status == "pending":
+            self._push(backoff(attempts), did, url, event, body, attempts)
+        elif status == "failed":
+            _log(f"{event} to {_redact(url)} failed after {attempts} attempt(s): {detail}")
+        return status
+
+    def _record(self, did: str, status: str, attempts: int, detail: str, ms) -> None:
+        upd = {"$set": {"status": status, "attempts": attempts, "last_detail": detail, "updated_at": now()},
+               "$push": {"log": {"$each": [{"at": now(), "status": status, "detail": detail, "ms": ms}],
+                                 "$slice": -20}}}
+        if status == "delivered":
+            upd["$set"]["delivered_at"] = now()
+        try:
+            self.coll().update_one({"_id": did}, upd)
+        except PyMongoError as e:
+            _log(f"could not log delivery {did[:8]}: {type(e).__name__}")
+
+    def requeue(self) -> int:
+        """After a restart, resume deliveries still pending for URLs that are still configured."""
+        urls = {_url_id(h["url"]): h["url"] for h in self.cfg["hooks"]}
+        n = 0
+        try:
+            for d in self.coll().find({"status": "pending"}).limit(MAX_QUEUE):
+                if d.get("url_id") in urls:
+                    self._push(0.0, d["_id"], urls[d["url_id"]], d["event"], d["body"].encode(),
+                               int(d.get("attempts") or 0))
+                    n += 1
+        except PyMongoError as e:
+            _log(f"could not resume pending deliveries: {type(e).__name__}")
+        return n
+
+    def run(self) -> None:
+        n = self.requeue()
+        if n:
+            _log(f"resumed {n} pending webhook deliveries")
+        while True:
+            with self.cv:
+                while not self.heap or self.heap[0][0] > time.time():
+                    self.cv.wait(None if not self.heap else max(0.05, self.heap[0][0] - time.time()))
+                item = heapq.heappop(self.heap)
+            try:
+                self.deliver(*item[2:])
+            except Exception as e:  # noqa: BLE001 - the sender must never die
+                _log(f"delivery crashed: {e}")
+
+
 def emit(event: str, key: str, data: dict) -> int:
     """Queue a webhook event if webhooks are on; no-op otherwise."""
     hooks = _state.get("hooks")
     return hooks.emit(event, key, data) if hooks else 0
+
+
+WATCH_PIPELINE = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "$or": [
+    {"ns.coll": "sar_drafts"},
+    {"ns.coll": "calls", "fullDocument.recommendation": "HOLD"},
+    {"ns.coll": "rings", "fullDocument.tier": "escalate"},
+]}}]
+
+
+def _watch(hooks: Webhooks) -> None:
+    """Change stream on calls, sar_drafts and rings; resume token saved after queueing (at-least-once)."""
+    while True:
+        try:
+            token = load_token(WATCH_KEY)
+            kw = {"resume_after": token} if token else {}
+            with db().watch(WATCH_PIPELINE, full_document="updateLookup", max_await_time_ms=1000, **kw) as stream:
+                _state["watching"] = True
+                last_save = time.time()
+                while stream.alive:
+                    ch = stream.try_next()
+                    if ch is None:
+                        if time.time() - last_save > 10 and stream.resume_token:
+                            save_token(WATCH_KEY, stream.resume_token)
+                            last_save = time.time()
+                        continue
+                    for event, key, data in events_from_change(ch):
+                        hooks.emit(event, key, data)
+                    save_token(WATCH_KEY, ch["_id"])
+                    last_save = time.time()
+        except Exception as e:  # noqa: BLE001
+            _state["watching"] = False
+            msg = str(e)
+            if getattr(e, "code", None) in (260, 280, 286) or "ChangeStreamHistoryLost" in msg:
+                _log(f"resume token unusable, restarting the stream from now: {msg[:120]}")
+                try:
+                    db().watch_state.delete_one({"_id": WATCH_KEY})
+                except PyMongoError:
+                    pass
+            else:
+                _log(f"change stream error, retrying in 3 s: {msg[:200]}")
+            time.sleep(3)
 
 
 # ---------------------------------------------------------------- white-label branding
@@ -582,25 +883,59 @@ def get_logo():
 # ---------------------------------------------------------------- health + start
 @router.get("/health", summary="Integration status: webhooks, delivery log, inbound counts")
 def integrations_health():
-    b = branding()
+    cfg, hooks, b = webhook_config(), _state["hooks"], branding()
     out = {"ok": True, "started": _state["started"],
-           "webhooks": {"enabled": _state["hooks"] is not None, "status": _state["note"]},
+           "webhooks": {"enabled": hooks is not None, "status": _state["note"], "watching": _state["watching"],
+                        "configured": [_redact(h["url"]) for h in cfg["hooks"]], "signed": bool(cfg["secret"]),
+                        "bank_internal_only": not cfg["allow_public"], "queued": hooks.queued() if hooks else 0,
+                        "last_delivery": hooks.last if hooks else None},
            "auth": {"token_required": bool(os.environ.get("TW_INTEGRATIONS_TOKEN"))},
            "branding": {"bank_name": b["bank_name"], "source": b["source"]}, "data_label": DATA_LABEL}
     try:
         d = db()
         out["counts"] = {"inbound_payments": d.inbound_payments.estimated_document_count(),
-                         "inbound_transactions": d.inbound_transactions.estimated_document_count()}
+                         "inbound_transactions": d.inbound_transactions.estimated_document_count(),
+                         "webhook_deliveries": {r["_id"]: r["n"] for r in d.webhook_deliveries.aggregate(
+                             [{"$group": {"_id": "$status", "n": {"$sum": 1}}}])}}
+        if out["webhooks"]["last_delivery"] is None:
+            last = d.webhook_deliveries.find_one({"status": {"$ne": "pending"}}, {"body": 0, "log": 0},
+                                                 sort=[("updated_at", -1)])
+            if last:
+                out["webhooks"]["last_delivery"] = {k: _iso(last.get(k)) if k == "updated_at" else last.get(k)
+                                                    for k in ("event", "url", "status", "last_detail", "attempts",
+                                                              "updated_at")}
     except PyMongoError as e:
         out.update(ok=False, error=f"database unavailable ({type(e).__name__})")
     return out
 
 
+def _ensure_indexes() -> None:
+    try:
+        d = db()
+        d.inbound_transactions.create_index("batch_id")
+        d.inbound_payments.create_index("received_at")
+        d.webhook_deliveries.create_index([("status", 1), ("updated_at", -1)])
+    except Exception as e:  # noqa: BLE001 - indexes are an optimisation only
+        _log(f"index setup skipped: {type(e).__name__}")
+
+
 def start() -> None:
-    """Called once from the app lifespan; never blocks."""
+    """Called once from the app lifespan. Never blocks; webhooks stay off unless URLs and a secret are set."""
     with _start_lock:
         if _state["started"]:
             return
         _state["started"] = True
-    _state["note"] = "off"
-    _log("started")
+    threading.Thread(target=_ensure_indexes, name="integrations-init", daemon=True).start()
+    cfg = webhook_config()
+    if not cfg["hooks"]:
+        _state["note"] = "off: no webhook URLs configured (TW_WEBHOOKS or config/integrations.json)"
+    elif not cfg["secret"]:
+        _state["note"] = "off: TW_WEBHOOK_SECRET is not set (unsigned webhooks are never sent)"
+    else:
+        hooks = Webhooks(cfg)
+        _state["hooks"] = hooks
+        threading.Thread(target=hooks.run, name="integrations-webhooks", daemon=True).start()
+        threading.Thread(target=_watch, args=(hooks,), name="integrations-watch", daemon=True).start()
+        _state["note"] = (f"on: {len(cfg['hooks'])} URL(s), "
+                          + ("public destinations allowed" if cfg["allow_public"] else "bank-internal destinations only"))
+    _log(f"webhooks {_state['note']}")

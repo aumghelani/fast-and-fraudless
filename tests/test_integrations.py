@@ -1,4 +1,7 @@
 """Bank integration tests: ISO 20022 parsing, ring screening, batch ingest, branding. Fakes only (no Mongo, no network)."""
+import hashlib
+import hmac
+import json
 import os
 import sys
 from pathlib import Path
@@ -288,3 +291,135 @@ def test_repo_branding_file_is_valid():
     b = integ.branding() if not os.environ.get("TW_BRANDING_FILE") else None
     if b:
         assert b["source"] == "branding.json" and "warnings" not in b
+
+
+# ---------------------------------------------------------------- outbound webhooks
+HOOK = "http://10.20.30.40:8443/aml/inbound"
+
+
+def hook_cfg(**kw):
+    return {"hooks": [{"url": HOOK, "events": list(integ.EVENTS)}], "secret": "s3cret", "allow_public": False,
+            "max_attempts": 3, "timeout_s": 1, "base_url": "http://fraud-box.bank.internal:8790", **kw}
+
+
+def test_sign_and_verify():
+    body = b'{"event":"sar_drafted"}'
+    want = "sha256=" + hmac.new(b"s3cret", body, hashlib.sha256).hexdigest()
+    assert integ.sign(body, "s3cret") == want
+    assert integ.verify(body, "s3cret", want)
+    assert not integ.verify(body + b" ", "s3cret", want) and not integ.verify(body, "other", want)
+    assert [integ.backoff(n) for n in (1, 2, 3, 7, 12)] == [1, 2, 4, 60, 60]
+
+
+def test_internal_destinations_only():
+    assert integ.is_internal("http://10.1.2.3/x") and integ.is_internal("https://[fd00::1]:8443/x")
+    assert integ.is_internal("http://localhost/x", resolve=lambda h, p: [(0, 0, 0, "", ("127.0.0.1", 0))])
+    assert not integ.is_internal("http://8.8.8.8/x")
+    assert not integ.is_internal("https://example.org/x", resolve=lambda h, p: [(0, 0, 0, "", ("93.184.216.34", 0))])
+
+
+def test_webhook_config_env_beats_file(tmp_path, monkeypatch):
+    f = tmp_path / "integrations.json"
+    f.write_text(json.dumps({"webhooks": [{"url": HOOK, "events": ["sar_drafted", "bogus"]}, "ftp://x/y"],
+                             "max_attempts": 4}))
+    monkeypatch.setenv("TW_INTEGRATIONS_FILE", str(f))
+    monkeypatch.delenv("TW_WEBHOOKS", raising=False)
+    monkeypatch.delenv("TW_WEBHOOK_SECRET", raising=False)
+    c = integ.webhook_config()
+    assert c["hooks"] == [{"url": HOOK, "events": ["sar_drafted"]}] and c["max_attempts"] == 4 and c["secret"] == ""
+    monkeypatch.setenv("TW_WEBHOOKS", "http://10.0.0.9/a, http://10.0.0.10/b")
+    monkeypatch.setenv("TW_WEBHOOK_SECRET", "k")
+    c = integ.webhook_config()
+    assert [h["url"] for h in c["hooks"]] == ["http://10.0.0.9/a", "http://10.0.0.10/b"] and c["secret"] == "k"
+    assert c["hooks"][0]["events"] == list(integ.EVENTS)
+
+
+def test_delivery_is_signed_retried_and_logged():
+    sent, codes = [], [ConnectionError("refused"), 503, 200]
+
+    def post(url, body, headers, timeout):
+        sent.append((url, body, headers))
+        r = codes.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    coll = FakeColl()
+    w = integ.Webhooks(hook_cfg(), post=post, coll=coll)
+    data = {"sar_id": "SAR-R-102", "ring_id": "R-102"}
+    assert w.emit("sar_drafted", "sar_drafted:SAR-R-102:r1:1", data) == 1
+    assert w.emit("sar_drafted", "sar_drafted:SAR-R-102:r1:1", data) == 0   # deduped
+    (did,) = coll.docs
+    statuses = []
+    while w.heap:
+        item = w.heap.pop(0)
+        statuses.append(w.deliver(*item[2:]))
+    assert statuses == ["pending", "pending", "delivered"]
+    url, body, headers = sent[-1]
+    assert url == HOOK and integ.verify(body, "s3cret", headers["X-FastFraudless-Signature"])
+    assert headers["X-FastFraudless-Event"] == "sar_drafted" and headers["X-FastFraudless-Delivery"] == did
+    assert sent[0][1] == body   # retries resend the same signed bytes
+    payload = json.loads(body)
+    assert payload["data"] == data and payload["bank"] and payload["event_id"]
+    assert payload["links"]["sar_xml"] == ("http://fraud-box.bank.internal:8790"
+                                           "/api/integrations/sar/SAR-R-102/fincen.xml")
+    doc = coll.docs[did]
+    assert doc["status"] == "delivered" and doc["attempts"] == 3 and len(doc["log"]) == 3
+    assert doc["url"] == HOOK and "s3cret" not in doc["body"]
+
+
+def test_delivery_permanent_failures():
+    w = integ.Webhooks(hook_cfg(), post=lambda *a: 400, coll=FakeColl())
+    assert w.deliver("d1", HOOK, "ring_escalated", b"{}", 0) == "failed"   # 4xx: no retry
+    w = integ.Webhooks(hook_cfg(), post=lambda *a: 500, coll=FakeColl())
+    assert w.deliver("d2", HOOK, "ring_escalated", b"{}", 2) == "failed"   # max_attempts reached
+    called = []
+    w = integ.Webhooks(hook_cfg(), post=lambda *a: called.append(a) or 200, coll=FakeColl())
+    assert w.deliver("d3", "http://8.8.8.8/x", "ring_escalated", b"{}", 0) == "failed" and called == []
+    assert "not bank-internal" in w.last["detail"]
+
+
+def test_subscriptions_filter_events():
+    w = integ.Webhooks(hook_cfg(hooks=[{"url": HOOK, "events": ["sar_decided"]}]), post=lambda *a: 200,
+                       coll=FakeColl())
+    assert w.emit("ring_escalated", "ring:R-1:x", {"ring_id": "R-1"}) == 0
+    assert w.emit("sar_decided", "sar_decided:SAR-R-1:approved:1", {"sar_id": "SAR-R-1", "ring_id": "R-1"}) == 1
+
+
+def test_events_from_change_docs():
+    call = {"_id": "0412", "recommendation": "HOLD", "started_at": "t0", "synthetic": True,
+            "payee_check": {"in_ring": True, "ring_id": "R-102", "hops": 2},
+            "cues": [{"cue": "URGENCY", "quote": "today"}, {"cue": "SECRECY", "quote": "q"}],
+            "customer": {"name": "Margaret Doyle (fictional)"}, "transcript": "secret words"}
+    (ev,) = integ.events_from_change({"ns": {"coll": "calls"}, "operationType": "replace", "fullDocument": call})
+    assert ev[0] == "hold_recommended" and ev[2]["ring_id"] == "R-102" and ev[2]["cues"] == ["SECRECY", "URGENCY"]
+    assert "Margaret" not in json.dumps(ev[2]) and "secret words" not in json.dumps(ev[2])   # ids and status only
+    assert integ.events_from_change({"ns": {"coll": "calls"}, "operationType": "replace",
+                                     "fullDocument": {**call, "recommendation": "NO_HOLD"}}) == []
+    sar = {"_id": "SAR-R-102", "ring_id": "R-102", "revision": 1, "received_at_ms": 5, "valid_all": True,
+           "citations": [{"txn_id": "T1", "valid": True}, {"txn_id": "T2", "valid": False}], "decision": None}
+    (ev,) = integ.events_from_change({"ns": {"coll": "sar_drafts"}, "operationType": "insert", "fullDocument": sar})
+    assert ev[0] == "sar_drafted" and (ev[2]["citations_verified"], ev[2]["citations_total"]) == (1, 2)
+    (ev,) = integ.events_from_change({"ns": {"coll": "sar_drafts"}, "operationType": "update",
+                                      "fullDocument": {**sar, "decision": "approved", "decided_by": "analyst"}})
+    assert ev[0] == "sar_decided" and ev[2]["decision"] == "approved"
+    ring = {"_id": "R-102", "tier": "escalate", "type": "FAN-IN", "accounts": ["a", "b"], "n_txns": 13, "found_at": "f"}
+    (ev,) = integ.events_from_change({"ns": {"coll": "rings"}, "operationType": "replace", "fullDocument": ring})
+    assert ev[0] == "ring_escalated" and ev[2]["n_accounts"] == 2 and ev[1] == "ring:R-102:f"
+    assert integ.events_from_change({"ns": {"coll": "rings"}, "operationType": "replace",
+                                     "fullDocument": {**ring, "tier": "watch"}}) == []
+
+
+def test_start_without_urls_or_secret_is_a_noop(monkeypatch, fake):
+    for k in ("TW_WEBHOOKS", "TW_WEBHOOK_SECRET"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("TW_INTEGRATIONS_FILE", str(SAMPLES / "missing.json"))
+    monkeypatch.setitem(integ._state, "started", False)
+    monkeypatch.setitem(integ._state, "hooks", None)
+    integ.start()
+    assert integ._state["hooks"] is None and "no webhook URLs" in integ._state["note"]
+    assert integ.emit("ring_escalated", "k", {"ring_id": "R-1"}) == 0
+    monkeypatch.setitem(integ._state, "started", False)
+    monkeypatch.setenv("TW_WEBHOOKS", HOOK)
+    integ.start()
+    assert integ._state["hooks"] is None and "TW_WEBHOOK_SECRET" in integ._state["note"]   # never unsigned
