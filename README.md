@@ -57,3 +57,11 @@ Each message is `data: {"type": "<type>", "ts": <epoch ms>, "data": {...}}`.
 | POST | `/api/demo/exfil` | the sandbox tries an outbound POST and the DENIED line shows up |
 | GET | `/api/audio/{clip}` | WAV file |
 | GET/POST | `/api/agent/**` | **only** paths the sandboxed agent may call (see agent/policy) |
+| GET | `/api/rings/{ring_id}` | one ring (any tier), e.g. the payee's ring during a call |
+| POST | `/api/integrations/iso20022/pacs008` · `/pain001` | ISO 20022 payment screening → `RING_MATCH` / `CLEAR` / `UNAVAILABLE` + recommendation (see INTEGRATION.md) |
+| POST | `/api/integrations/transactions` | core-banking batch ingest (CSV in IBM AML layout or JSON) |
+| GET | `/api/integrations/sar/{sar_id}/fincen.xml` · `.json` | SAR draft export (DRAFT, validated citations only) |
+| GET | `/api/integrations/cases/export.csv` | case-management export |
+| GET | `/api/integrations/branding` · `/health` | white-label config · integration status |
+
+SSE also carries `integration` events `{kind, ref, result}` when a payment message is screened.
