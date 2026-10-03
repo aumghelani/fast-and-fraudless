@@ -1,5 +1,5 @@
 // Live call strip: orb, who is on the line, the newest sentence, and the start buttons.
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { useStoryCall, verdictOf } from '../flow/derive'
 import { useCtl } from '../flow/CtlProvider'
 import { StartTray } from '../shell/StartTray'
@@ -9,12 +9,16 @@ import { Button } from '../ui/primitives'
 import { DASH, usd } from '../lib/format'
 import type { Call } from '../lib/types'
 
-/** The last sentence said, the in-progress words first. */
-function newestSentence(c?: Call): string {
-  const text = `${c?.transcript_final ?? c?.transcript ?? ''} ${c?.partial ?? ''}`.trim()
-  if (!text) return ''
-  const parts = text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean)
-  return parts[parts.length - 1] ?? ''
+/** Caption tail: the newest sentence (in-progress words included) and up to ~180 chars before it. */
+function captionOf(c?: Call): { older: string; newest: string; n: number } {
+  const text = `${c?.transcript_final ?? c?.transcript ?? ''} ${c?.partial ?? ''}`.replace(/\s+/g, ' ').trim()
+  if (!text) return { older: '', newest: '', n: 0 }
+  const parts = text.split(/(?<=[.!?])\s+/).filter(Boolean)
+  const n = parts.length
+  const newest = parts.pop() ?? ''
+  let older = parts.join(' ')
+  if (older.length > 180) older = '…' + older.slice(older.indexOf(' ', older.length - 180) + 1)
+  return { older, newest, n }
 }
 
 function plainError(e?: string | null): string {
@@ -31,7 +35,7 @@ export function CallStrip() {
   const v = verdictOf(call)
   const tone: OrbTone = active ? 'listening' : v ?? 'idle'
   const name = customerName(call)
-  const said = newestSentence(call)
+  const { older, newest, n } = captionOf(call)
   const err = plainError(ctl.error)
 
   const status = err
@@ -57,22 +61,26 @@ export function CallStrip() {
 
       <span aria-hidden className="h-12 w-px shrink-0 bg-line" />
 
-      {/* newest sentence; a new one fades in over 300 ms */}
-      <div className="relative h-full min-w-0 flex-1 overflow-hidden">
-        <AnimatePresence initial={false} mode="popLayout">
-          <motion.p
-            key={said || (call ? 'waiting' : 'empty')}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="absolute inset-0 flex items-center"
-          >
-            <span className={said ? 'line-clamp-2 text-body text-ink' : 'text-body text-mute'}>
-              {said ? `“${said}”` : call ? 'Listening for the customer…' : 'Start a call to watch a wire get screened while the customer is still talking.'}
-            </span>
-          </motion.p>
-        </AnimatePresence>
+      {/* live caption, bottom-anchored at two lines; only the newest sentence fades in */}
+      <div className="flex h-[3.375rem] min-w-0 flex-1 flex-col justify-end overflow-hidden">
+        {newest ? (
+          <p className="text-body leading-normal">
+            {older && <span className="text-mute">{older} </span>}
+            <motion.span
+              key={`${call?.call_id}-${n}`} // a new sentence fades in once; growing words do not
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="text-ink"
+            >
+              {newest}
+            </motion.span>
+          </p>
+        ) : (
+          <p className="text-body leading-normal text-mute">
+            {call ? 'Listening for the customer…' : 'Start a call to watch a wire get screened while the customer is still talking.'}
+          </p>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
