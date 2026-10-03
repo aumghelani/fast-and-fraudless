@@ -75,14 +75,14 @@ function Connector({ pts, moving }: { pts: [Pt, Pt]; moving: boolean }) {
   const d = curve(pts)
   return (
     <g>
-      <path d={d} fill="none" stroke="var(--color-line-2)" strokeWidth={1.6} strokeDasharray="0 6" strokeLinecap="round" />
+      <path d={d} fill="none" stroke="var(--color-mute)" strokeOpacity={0.55} strokeWidth={2} strokeDasharray="0 7" strokeLinecap="round" />
       {moving && (
         <motion.path d={d} fill="none" stroke="var(--color-accent)" strokeWidth={3.2} strokeLinecap="round"
           strokeDasharray="0 26" initial={{ strokeDashoffset: 0 }} animate={{ strokeDashoffset: -26 }}
           transition={{ duration: 1.1, ease: 'linear', repeat: Infinity }} />
       )}
       {pts.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="var(--color-surface)" stroke={moving ? 'var(--color-accent)' : 'var(--color-line-2)'} strokeWidth={1.5} />
+        <circle key={i} cx={p.x} cy={p.y} r={4} fill="var(--color-surface)" stroke={moving ? 'var(--color-accent)' : 'var(--color-mute)'} strokeOpacity={moving ? 1 : 0.6} strokeWidth={1.6} />
       ))}
     </g>
   )
@@ -116,9 +116,9 @@ export function Pipeline() {
     if (c) {
       const y = c.top + c.height / 2 - o.top
       const y2 = Math.min(Math.max(y, r.top - o.top + 70), r.bottom - o.top - 40)
-      g.a = [{ x: c.right - o.left + 6, y }, { x: r.left - o.left - 6, y: y2 }]
+      g.a = [{ x: c.right - o.left + 8, y }, { x: r.left - o.left - 8, y: y2 }]
     }
-    g.b = [{ x: r.right - o.left + 6, y: r.top - o.top + 84 }, { x: d.left - o.left - 6, y: d.top - o.top + 112 }]
+    g.b = [{ x: r.right - o.left + 8, y: r.top - o.top + 84 }, { x: d.left - o.left - 8, y: d.top - o.top + 112 }]
     setGeo((p) => (JSON.stringify(p) === JSON.stringify(g) ? p : g))
   }, [])
   const activeId = active?.call_id
@@ -135,7 +135,7 @@ export function Pipeline() {
   }, [measure])
 
   return (
-    <div ref={box} className="relative grid h-full min-h-0 grid-cols-[28fr_38fr_34fr] gap-x-14">
+    <div ref={box} className="relative grid h-full min-h-0 grid-cols-[28fr_38fr_34fr] gap-x-16">
       <div className="flex min-h-0 flex-col">
         <div className="mb-3 flex h-[18px] items-center justify-between font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-ink-2">
           <span>Wire queue</span>

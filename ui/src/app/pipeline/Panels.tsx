@@ -54,7 +54,8 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
           <p className="mt-3 text-center font-mono text-[13px] text-mute">Waiting for the next wire…</p>
         </div>
       ) : (
-        <ul className="flex flex-col gap-1 overflow-hidden">
+        <div className="flex h-full flex-col">
+        <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
           {visible.map((c, i) => (
             <motion.li
               key={c.id}
@@ -76,6 +77,14 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
             </motion.li>
           ))}
         </ul>
+        <div className="mt-2 flex shrink-0 items-center justify-between border-t border-line px-3 pt-3 font-mono text-[12px] text-mute">
+          <span className="flex items-center gap-2">
+            <span className={cx('size-1.5 rounded-full', verdictOf(call) ? 'bg-clear' : call.ended ? 'bg-faint' : 'bg-accent')} />
+            {verdictOf(call) ? 'All checks read' : call.ended ? 'Call ended' : 'Reading the call…'}
+          </span>
+          <span className="tnum">{call.call_id}</span>
+        </div>
+        </div>
       )}
     </Card>
   )
@@ -161,7 +170,7 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
   return (
     <Card bar title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex flex-col px-6 pb-5 pt-5">
       <div className="flex items-baseline gap-2 font-mono">
-        <span className="inline-block w-[2ch] text-right text-[64px] font-semibold leading-none text-accent tnum">
+        <span className={cx('inline-block w-[2ch] text-right text-[64px] font-semibold leading-none tnum', risk == null ? 'text-faint' : 'text-accent')}>
           {risk == null ? '—' : <Ticker value={risk} reduced={reduced} />}
         </span>
         <span className="text-[22px] text-mute">/100</span>
@@ -200,7 +209,16 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
         {call?.reasons?.[0] ?? (call ? 'Listening to the call…' : '—')}
       </p>
 
-      <div className="mt-auto flex h-10 items-center gap-3">
+      <div className="mt-3 min-h-0 flex-1 overflow-hidden">
+        {call?.questions?.[0] && verdict && verdict !== 'NO_HOLD' && (
+          <>
+            <p className="font-mono text-[11.5px] font-medium uppercase tracking-[0.08em] text-mute">Ask the customer</p>
+            <p className="mt-1 line-clamp-2 text-[14px] leading-[21px] text-ink">{call.questions[0]}</p>
+          </>
+        )}
+      </div>
+
+      <div className="mt-3 flex h-10 shrink-0 items-center gap-3">
         {decided ? (
           <span className="inline-flex items-center gap-2 font-mono text-[14px] text-ink">
             <span className={cx('grid size-6 place-items-center rounded-full', decided === 'hold' ? 'bg-hold-soft text-hold' : 'bg-clear-soft text-clear')}>
