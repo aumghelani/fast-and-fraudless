@@ -8,4 +8,5 @@ export TW_AGENT_TIMEOUT_S="${TW_AGENT_TIMEOUT_S:-420}"
 export TW_AGENT_CATCHUP_MAX="${TW_AGENT_CATCHUP_MAX:-5}"
 export TW_TELEGRAM_CHAT_IDS="${TW_TELEGRAM_CHAT_IDS:-${TELEGRAM_ALLOWED_IDS:-}}"
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
-exec "$REPO/.venv/bin/uvicorn" backend.app:app --host 0.0.0.0 --port 8790
+# open SSE streams never finish: cap the graceful stop, or the old process lingers without its port (E-024)
+exec "$REPO/.venv/bin/uvicorn" backend.app:app --host 0.0.0.0 --port 8790 --timeout-graceful-shutdown 3
