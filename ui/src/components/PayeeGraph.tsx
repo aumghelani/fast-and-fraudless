@@ -64,7 +64,7 @@ export function PayeeGraph({ call }: { call?: Call }) {
         },
         {
           selector: 'node.customer',
-          style: { 'background-color': '#1b2330', 'border-color': '#6b7686', 'border-width': 2, width: 26, height: 26, label: 'data(label)', color: '#e8edf4', 'font-weight': 600 },
+          style: { 'background-color': '#1b2330', 'border-color': '#6b7686', 'border-width': 2, width: 26, height: 26, label: 'data(label)', color: '#e8edf4', 'font-weight': 600, 'text-valign': 'top', 'text-margin-y': -5 },
         },
         {
           selector: 'node.payee',
@@ -117,10 +117,10 @@ export function PayeeGraph({ call }: { call?: Call }) {
     const els: cytoscape.ElementDefinition[] = []
     const inRing = !!model.hub
     els.push({ data: { id: 'c', label: 'customer' }, classes: 'customer' })
-    els.push({ data: { id: model.payee, label: `payee\n${model.payee}` }, classes: 'payee' + (inRing ? '' : ' clean') })
-    els.push({ data: { id: 'w', source: 'c', target: model.payee, label: 'wire' }, classes: 'wire' })
+    els.push({ data: { id: model.payee, label: 'payee' }, classes: 'payee' + (inRing ? '' : ' clean') })
+    els.push({ data: { id: 'w', source: 'c', target: model.payee, label: '' }, classes: 'wire' })
     if (model.hub && model.hub !== model.payee) {
-      els.push({ data: { id: model.hub, label: `${ringId ?? 'ring'}\nhub ${model.hub}` }, classes: 'hub' })
+      els.push({ data: { id: model.hub, label: `${ringId ?? 'ring'} hub` }, classes: 'hub' })
       els.push({ data: { id: 'f', source: model.payee, target: model.hub }, classes: 'feed' })
     } else if (model.hub) {
       cy.add(els)

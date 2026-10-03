@@ -218,3 +218,6 @@ export function useActiveCall() {
   }
   return best
 }
+
+// dev-only hook so visual states (e.g. OFFLINE) can be checked from a headless browser; stripped from builds
+if (import.meta.env.DEV) (window as any).__ffInject = (m: SseMessage) => applyMessage(m)
