@@ -1,7 +1,7 @@
 // Pure mapping: a live call -> the checks, status and risk index the hero shows.
 import type { Call } from '../../lib/types'
 import { usd } from '../../lib/format'
-import { verdictOf, type Verdict } from '../selectors'
+import { heardOf, sentencesOf, verdictOf, type Verdict } from '../selectors'
 
 export type CheckTone = 'flag' | 'pass' | 'info'
 export interface Check { id: string; label: string; value: string; quote?: string; tone: CheckTone }
@@ -34,6 +34,16 @@ export const wireTitle = (c: Call) => `Wire · ${c.amount != null ? usd(c.amount
 /** Real checks behind the decision, in reveal order. */
 export function checksOf(c: Call): Check[] {
   const out: Check[] = []
+  // nothing is checked on screen before the customer has spoken
+  if (!heardOf(c)) return out
+  // account checks run once the wire is asked for (amount heard), or after two sentences
+  const asked = !!c.ended || (c.cues ?? []).some((q) => String(q?.cue).toUpperCase() === 'AMOUNT_STATED') || sentencesOf(c) >= 2
+  if (asked) accountChecks(c, out)
+  cueChecks(c, out)
+  return out
+}
+
+function accountChecks(c: Call, out: Check[]) {
   const pc = c.payee_check
   const label = 'Payee in GPU ring map'
   if (!pc || Object.keys(pc).length === 0) out.push({ id: 'ring', label, value: 'Checking…', tone: 'info' })
@@ -62,7 +72,9 @@ export function checksOf(c: Call): Check[] {
       ? { id: 'ratio', label: 'Amount vs usual', value: '—', tone: 'info' }
       : { id: 'ratio', label: 'Amount vs usual', value: `${ratio.toFixed(1)}×`, tone: ratio >= RATIO_FLAG ? 'flag' : 'pass' },
   )
+}
 
+function cueChecks(c: Call, out: Check[]) {
   // distinct cues, first quote wins (as the rules do)
   const quotes = new Map<string, string>()
   for (const q of c.cues ?? []) {
@@ -76,7 +88,6 @@ export function checksOf(c: Call): Check[] {
   for (const [k, q] of quotes)
     if ((TRUST as readonly string[]).includes(k))
       out.push({ id: `cue:${k}`, label: CUE_LABEL[k], value: 'Lowers risk', quote: q ? clip(q, 44) : undefined, tone: 'pass' })
-  return out
 }
 
 /** Risk index from the decision and the rule hits only (rules decide; this just places the knob). */

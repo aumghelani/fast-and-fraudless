@@ -34,7 +34,8 @@ function useReveal(key: string, total: number, reduced: boolean): number {
 
 export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
   const reduced = usePrefersReducedMotion()
-  const key = call ? `${call.call_id}|${verdictOf(call) ?? ''}` : ''
+  // keyed by call only: checks arrive as the call is transcribed and each one slides in once
+  const key = call ? call.call_id : ''
   const shown = useReveal(key, checks.length, reduced)
   const flagged = checks.filter((c) => c.tone === 'flag').length
   const visible = checks.slice(0, shown)
@@ -42,7 +43,7 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
   return (
     <Card bar title="Rules & Checks" right={call ? `${flagged} of ${checks.length} flagged` : '—'} className="h-full"
       bodyClassName="relative px-4 py-4">
-      {!call ? (
+      {!call || checks.length === 0 ? (
         <div className="flex h-full flex-col justify-center gap-3 px-2">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-3 opacity-60">
@@ -51,7 +52,9 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
               <span className="ml-auto h-2.5 w-16 rounded-full bg-surface-2" />
             </div>
           ))}
-          <p className="mt-3 text-center font-mono text-[13px] text-mute">Waiting for the next wire…</p>
+          <p className="mt-3 text-center font-mono text-[13px] text-mute">
+            {!call ? 'Waiting for the next wire…' : call.ended ? 'Call ended before any words were heard' : 'Listening… checks appear as the customer speaks'}
+          </p>
         </div>
       ) : (
         <div className="flex h-full flex-col">

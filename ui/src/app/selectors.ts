@@ -9,7 +9,20 @@ export { useActiveCall }
 
 export type Verdict = 'HOLD' | 'VERIFY' | 'NO_HOLD'
 
+/** True once speech from this call has been transcribed (nothing is shown as decided before that). */
+export function heardOf(c?: Call): boolean {
+  return !!(c?.transcript_final || c?.transcript || c?.partial || '').trim()
+}
+
+/** Transcribed sentences so far. */
+export function sentencesOf(c?: Call): number {
+  const t = (c?.transcript_final || c?.transcript || '').trim()
+  return t ? t.split(/(?<=[.!?])\s+/).filter(Boolean).length : 0
+}
+
+/** The rules' verdict, shown only after the call has been heard. */
 export function verdictOf(c?: Call): Verdict | null {
+  if (!heardOf(c)) return null
   const r = c?.recommendation
   return r === 'HOLD' || r === 'VERIFY' || r === 'NO_HOLD' ? r : null
 }
