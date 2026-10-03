@@ -45,13 +45,15 @@ export function useNow(on: boolean): number {
 
 /** True while the call's audio or words changed in the last few seconds (e.g. a call run from another screen). */
 export function useRecentActivity(c?: Call, windowMs = 15000): boolean {
-  const sig = c ? [c.call_id, c.audio_s ?? '', c.windows?.length ?? 0, c.partial ?? '', (c.transcript || '').length].join('|') : ''
-  const prev = useRef<string | null>(null)
+  const id = c?.call_id ?? ''
+  const sig = c ? [c.audio_s ?? '', c.windows?.length ?? 0, c.partial ?? '', (c.transcript || '').length].join('|') : ''
+  const prev = useRef<{ id: string; sig: string } | null>(null)
   const [at, setAt] = useState(0)
   useEffect(() => {
-    if (prev.current !== null && prev.current !== sig && sig) setAt(Date.now())
-    prev.current = sig
-  }, [sig])
+    // only growth within the same call counts; a call first seen (page load, hydrate) does not
+    if (id && prev.current?.id === id && prev.current.sig !== sig) setAt(Date.now())
+    prev.current = { id, sig }
+  }, [id, sig])
   const now = useNow(at > 0)
   const recent = at > 0 && now - at < windowMs
   useEffect(() => {

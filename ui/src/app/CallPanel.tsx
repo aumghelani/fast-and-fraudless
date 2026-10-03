@@ -155,7 +155,7 @@ export function CallPanel() {
             {call?.amount != null && <> · wire {usd(call.amount)}</>}
           </div>
         ) : (
-          <div className="truncate font-mono text-[12px] text-mute">Line open · speech stays on this box</div>
+          <div className="truncate font-mono text-[12px] text-mute">Line open · speech stays local</div>
         )}
       </div>
 
