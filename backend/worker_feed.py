@@ -22,13 +22,16 @@ def publish_meta(doc: dict) -> None:
         bus.publish("tick", body)
     elif _id == "bench":
         bus.publish("bench", body)
-    elif _id in ("eval_rings", "eval_calls"):
+    elif _id in ("eval_rings", "eval_calls", "eval_redteam"):
         merged = {}
-        for d in db().meta.find({"_id": {"$in": ["eval_rings", "eval_calls"]}}):
-            merged.update({k: v for k, v in d.items() if k != "_id"})
+        for d in db().meta.find({"_id": {"$in": ["eval_rings", "eval_calls", "eval_redteam"]}}):
+            prefix = "redteam_" if d["_id"] == "eval_redteam" else ""   # avoid key clashes
+            merged.update({prefix + k: v for k, v in d.items() if k != "_id"})
         bus.publish("eval", merged)
     elif _id == "counters":
         bus.publish("counters", {k: body.get(k, 0) for k in ("customer_data_out", "alerts_sent", "denied_total")})
+    elif _id == "watchdog":
+        bus.publish("watchdog", body)
 
 
 def hydrate() -> bool:

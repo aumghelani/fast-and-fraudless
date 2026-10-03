@@ -40,6 +40,8 @@ Each message is `data: {"type": "<type>", "ts": <epoch ms>, "data": {...}}`.
 | `bench` | `{rows, cpu_s, gpu_s}` |
 | `eval` | `{rings_recovered, rings_total, flagged_precision, scam_caught, scam_total, false_holds, normal_total}` |
 | `net` | `{online:bool}` |
+| `watchdog` | self-healing status from the watchdog (e.g. `{checks, recoveries, last_recovery}`); optional |
+| `eval` (red-team fields) | `redteam_attempts, redteam_decision_changed, redteam_invented_facts_passed, redteam_data_out` (present once the red-team has run) |
 | `health` | `{uptime_s, restored:bool}` |
 
 ### REST
