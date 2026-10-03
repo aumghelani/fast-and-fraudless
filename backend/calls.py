@@ -496,6 +496,7 @@ def _replay_transcript_fallback(c: Call, path: Path, duration_s: float) -> None:
 # ---------------------------------------------------------------- routes
 class StartBody(BaseModel):
     scenario: Optional[str] = None
+    name: Optional[str] = None   # caller's name for an in-app call (generic profile)
 
 
 class ReplayBody(BaseModel):
@@ -516,6 +517,10 @@ def start_call(body: Optional[StartBody] = Body(default=None)):
             raise HTTPException(400, "scenario must look like CALL-01")
     cid = _new_id()
     c = Call(cid, scenario)
+    name = ((body.name if body else None) or "").strip()[:40]
+    if name and scenario is None:
+        c.customer["name"] = f"{name} (fictional)"
+        c.label = f"In-app call · {name} · SYNTHETIC"
     with _calls_lock:
         _calls[cid] = c
     _publish(c, persist=True)

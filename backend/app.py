@@ -37,6 +37,7 @@ agent_api = _optional("agent_api")
 agent_bridge = _optional("agent_bridge")
 calls = _optional("calls")
 integrations = _optional("integrations")
+rtc = _optional("rtc")
 
 
 def _health_loop() -> None:
@@ -69,7 +70,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Fast and Fraudless", lifespan=lifespan)
-for mod in (agent_api, calls, integrations):
+for mod in (agent_api, calls, integrations, rtc):
     if mod and hasattr(mod, "router"):
         app.include_router(mod.router)
 
