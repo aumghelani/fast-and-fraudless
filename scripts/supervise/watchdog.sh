@@ -12,6 +12,11 @@ BACKEND_PAT="[u]vicorn backend.app:app"
 declare -A fails=() quiet=() prev=() seen=()
 
 log() { printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG"; }
+backend_pids() {  # real uvicorn processes only: a shell whose command line mentions the app is not one
+  local p; for p in $(pgrep -f "$BACKEND_PAT"); do
+    case "$(ps -o comm= -p "$p" 2>/dev/null)" in uvicorn|python*) echo "$p";; esac
+  done
+}
 event() {  # target action reason exit_code
   local ok=0; [ "$4" = 0 ] && ok=1
   log "HEAL $1: $2 ($3) -> $([ $ok = 1 ] && echo ok || echo "FAILED (exit $4)")"
@@ -44,7 +49,7 @@ while true; do
       grace backend 60
     fi
     main="$(systemctl --user show -p MainPID --value tw-backend)"
-    for p in $(pgrep -f "$BACKEND_PAT"); do   # a second backend runs a second agent bridge (E-024)
+    for p in $(backend_pids); do   # a second backend runs a second agent bridge (E-024)
       [ "$p" = "$main" ] && continue
       [ "$(ps -o etimes= -p "$p" 2>/dev/null | tr -d ' ')" -gt 20 ] 2>/dev/null || continue
       log "ALERT: orphan backend pid $p besides unit pid $main"
@@ -53,7 +58,7 @@ while true; do
   else
     b=stopped; check backend stopped || true
   fi
-  nb="$(pgrep -fc "$BACKEND_PAT")"; [ "$nb" -gt 1 ] && log "ALERT: $nb backend processes"
+  nb="$(backend_pids | wc -l)"; [ "$nb" -gt 1 ] && log "ALERT: $nb backend processes"
 
   # vLLM: report only (a restart costs minutes; Docker restarts a crashed container)
   curl -fs -m 5 -o /dev/null http://127.0.0.1:8000/v1/models && v=ok || v=fail

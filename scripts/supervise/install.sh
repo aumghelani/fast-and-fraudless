@@ -27,10 +27,15 @@ systemctl --user daemon-reload
 echo "units changed:${changed:- none}"
 
 # hand over processes started by hand (nohup backend, detached worker): never two writers
+backend_pids() {  # real uvicorn processes only: a shell whose command line mentions the app is not one
+  local p; for p in $(pgrep -f "[u]vicorn backend.app:app"); do
+    case "$(ps -o comm= -p "$p" 2>/dev/null)" in uvicorn|python*) echo "$p";; esac
+  done
+}
 if ! systemctl --user is-active -q tw-backend; then
-  pkill -f "[u]vicorn backend.app:app" 2>/dev/null || true
-  for _ in 1 2 3 4 5; do pgrep -f "[u]vicorn backend.app:app" >/dev/null || break; sleep 1; done
-  pkill -9 -f "[u]vicorn backend.app:app" 2>/dev/null || true
+  pids="$(backend_pids)"; [ -n "$pids" ] && kill $pids 2>/dev/null || true
+  for _ in 1 2 3 4 5; do [ -z "$(backend_pids)" ] && break; sleep 1; done
+  pids="$(backend_pids)"; [ -n "$pids" ] && kill -9 $pids 2>/dev/null || true
 fi
 if ! systemctl --user is-active -q tw-worker; then
   docker exec -u 0 rapids sh -c 'for p in $(pgrep -f "[r]ingfinder.py --data"); do

@@ -41,7 +41,11 @@ elif cmd == "wake":   # largest escalated ring without a case: flip its tier so 
 PYEOF
 }
 jget() { "$PY" -c "import json,sys; v=json.loads(sys.argv[1]).get(sys.argv[2]); print('' if v is None else v)" "$1" "$2"; }
-agent_ring() { pgrep -af "$AGENT_PAT" | grep -o 'ring-R-[0-9]*' | head -1 | sed 's/^ring-//'; }
+agent_pids() { local p; for p in $(pgrep -f "$AGENT_PAT"); do [ "$(ps -o comm= -p "$p")" = node ] && echo "$p"; done; }
+agent_ring() {
+  local p; for p in $(agent_pids); do tr '\0' ' ' < "/proc/$p/cmdline"; echo; done \
+    | grep -o 'ring-R-[0-9]*' | head -1 | sed 's/^ring-//'
+}
 gt() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a > b)}'; }
 
 say "Fast and Fraudless self-healing demo: three kill -9s, then hands off."
@@ -59,14 +63,19 @@ if [ -z "$RID" ]; then
   for _ in $(seq 120); do RID="$(agent_ring)"; [ -n "$RID" ] && break; sleep 1; done
 fi
 [ -z "$RID" ] && { say "no agent run started; is the backend up and the bridge on?"; exit 1; }
-say "agent is investigating ring $RID (nemoclaw pid $(pgrep -f "$AGENT_PAT" | head -1))"
+say "agent is investigating ring $RID (nemoclaw pid $(agent_pids | head -1))"
 sleep 3
 
 T_K="$(now)"; K_MS="$(awk -v t="$T_K" 'BEGIN{printf "%d", t*1000}')"
-say "1/3  kill -9 the agent run on $RID";  pkill -9 -f "$AGENT_PAT"
+say "1/3  kill -9 the agent run on $RID";  kill -9 $(agent_pids) 2>/dev/null
 sleep 1
-say "2/3  kill -9 the backend (uvicorn pid $(pgrep -f '[u]vicorn backend.app' | tr '\n' ' '))"
-pkill -9 -f "[u]vicorn backend.app"
+BPID="$(systemctl --user show -p MainPID --value tw-backend 2>/dev/null)"
+if [ -z "$BPID" ] || [ "$BPID" = 0 ]; then   # not under systemd: real uvicorn processes only
+  BPID="$(for p in $(pgrep -f '[u]vicorn backend.app'); do
+    case "$(ps -o comm= -p "$p")" in uvicorn|python*) echo "$p";; esac; done | tr '\n' ' ')"
+fi
+say "2/3  kill -9 the backend (uvicorn pid $BPID)"
+kill -9 $BPID
 sleep 1
 if docker exec -u 0 "$C" pkill -9 -f "[r]ingfinder.py .*--loop"; then
   say "3/3  kill -9 the GPU ring finder (container $C, was pid $OLD_PID)"; W_ON=1
