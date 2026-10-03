@@ -1,4 +1,4 @@
-"""Content-free alerts (Telegram, optional Slack). The only thing that leaves the box (CLAUDE.md rule 4).
+"""Content-free alerts (Telegram, optional Slack). The only thing that leaves the box (AGENT_RULES.md rule 4).
 
     notify("Ring R-102 escalated — SAR draft ready for analyst review", kind="ring")
 

@@ -1,4 +1,4 @@
-# Tripwire Architecture
+# Fast and Fraudless: Architecture
 
 > **One sentence:** Tripwire stops a scam wire while the customer is still on the phone, on a box that never leaves the bank.
 >

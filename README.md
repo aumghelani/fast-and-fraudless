@@ -1,6 +1,6 @@
-# Tripwire
+# Fast and Fraudless
 
-**Tripwire stops a scam wire while the customer is still on the phone, on a box that never leaves the bank.**
+**Fast and Fraudless stops a scam wire while the customer is still on the phone, on a box that never leaves the bank.**
 
 Built on 3 Oct 2026 at the Dell × NVIDIA AI Factory hackathon (Boston). It runs entirely on a Dell Pro Max GB10.
 

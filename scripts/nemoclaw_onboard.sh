@@ -7,7 +7,7 @@ set -uo pipefail
 curl -sf localhost:8000/v1/models >/dev/null || { echo "vLLM is not serving on :8000 yet"; exit 1; }
 
 # never leak cloud keys into onboarding; never enable web search
-unset NVIDIA_INFERENCE_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY BRAVE_API_KEY TAVILY_API_KEY GEMINI_API_KEY
+for v in $(env | grep -o "^[A-Z0-9_]*_API_KEY"); do unset "$v"; done   # no cloud keys may leak into onboarding
 set -a
 for f in "$HOME"/tw/secrets/telegram.env "$HOME"/tw/secrets/slack.env; do [ -f "$f" ] && . "$f"; done
 set +a

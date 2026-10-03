@@ -28,7 +28,7 @@ def _optional(module: str):
     """Modules built by other team members; the app must start even if one is missing or broken."""
     try:
         return importlib.import_module(f"backend.{module}")
-    except Exception as e:  # report, don't crash (CLAUDE.md: honest, never silent)
+    except Exception as e:  # report, don't crash (AGENT_RULES.md: honest, never silent)
         print(f"[app] optional module backend.{module} unavailable: {e}", flush=True)
         return None
 

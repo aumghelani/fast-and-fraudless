@@ -1,4 +1,4 @@
-# Working rules for anyone (human or AI) touching this repo
+# Working rules for everyone touching this repo
 
 1. **Read `ARCHITECTURE.md` first.** Do not add components, services or features that are not in it. If something must change, update `ARCHITECTURE.md` in the same commit and say why in `DECISIONS.md`.
 2. **The README contract is law.** SSE event types and REST paths in `README.md` are shared by backend and UI. Change them only together, in one commit.
