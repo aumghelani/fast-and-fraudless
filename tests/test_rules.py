@@ -91,9 +91,13 @@ def test_duplicate_cue_counts_once():
     assert decide(cues, GENERIC, 5000, CLEAN)["recommendation"] == "NO_HOLD"
 
 
-def test_verify_blocked_by_high_risk_cue():
+def test_scam_cue_never_lowers_friction():
+    # monotonic: adding a high-risk cue to a large "verified" wire keeps VERIFY (never NO_HOLD)
     cues = c(("VERIFIED_INDEPENDENTLY", "I called their office"), ("URGENCY", "today"))
-    assert decide(cues, GENERIC, 85000, CLEAN)["recommendation"] == "NO_HOLD"
+    assert decide(cues, GENERIC, 85000, CLEAN)["recommendation"] == "VERIFY"
+    assert decide(c(("URGENCY", "today")), GENERIC, 85000, CLEAN)["recommendation"] == "VERIFY"
+    two = c(("URGENCY", "today"), ("SECRECY", "do not tell anyone"))
+    assert decide(two, GENERIC, 85000, CLEAN)["recommendation"] == "HOLD"
 
 
 def test_verify_needs_large_amount():

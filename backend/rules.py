@@ -4,7 +4,7 @@ Pure and deterministic: no I/O, no model calls, no clock. Same inputs always giv
 
 - HOLD   if payee_in_ring, or >= 2 distinct high-risk cues,
          or (first_wire and amount_ratio >= 5 and >= 1 high-risk cue).
-- VERIFY if amount >= $50k with VERIFIED_INDEPENDENTLY and no high-risk cues.
+- VERIFY if amount >= $50k with VERIFIED_INDEPENDENTLY or one high-risk cue (monotonic: cues never lower friction).
 - NO_HOLD otherwise.
 """
 from __future__ import annotations
@@ -96,14 +96,17 @@ def decide(cues: list[dict], customer: dict, amount: float | None, payee_check: 
 
     if hold_why:
         rec = "HOLD"
-    elif amt is not None and amt >= VERIFY_MIN_USD and "VERIFIED_INDEPENDENTLY" in has and not high:
-        rec = "VERIFY"
+    elif amt is not None and amt >= VERIFY_MIN_USD and ("VERIFIED_INDEPENDENTLY" in has or high):
+        rec = "VERIFY"   # monotonic: a scam cue never lowers friction on a large wire
     else:
         rec = "NO_HOLD"
 
     # human-readable reasons: why this recommendation, then the supporting facts
     reasons: list[str] = list(hold_why)
-    if rec == "VERIFY":
+    if rec == "VERIFY" and high:
+        reasons.append(f"Large amount ({_usd(amt)}) with a scam cue ({', '.join(high)}). "
+                       "Do a callback on a known number before release")
+    elif rec == "VERIFY":
         reasons.append(f"Large amount ({_usd(amt)}) with no scam cues; customer says they verified the "
                        "account. Do a callback on a known number before release")
     if first_wire:

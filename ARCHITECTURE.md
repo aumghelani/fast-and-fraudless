@@ -93,7 +93,7 @@ So every model runs on the Dell Pro Max GB10, and the agent runs in an OpenShell
 | cues: URGENCY, SECRECY, AUTHORITY, STORY_CHANGE, COACHING, REMOTE_CONTROL, VERIFIED_INDEPENDENTLY, ROUTINE_PAYEE | LLM extraction (perception only) |
 
 - **HOLD** if `payee_in_ring` **or** ≥2 high-risk cues **or** (`first_wire` and `amount_ratio ≥ 5` and ≥1 high-risk cue).
-- **VERIFY** if large amount (≥ $50k) with VERIFIED_INDEPENDENTLY and no high-risk cues.
+- **VERIFY** if large amount (≥ $50k) with VERIFIED_INDEPENDENTLY **or one** high-risk cue (monotonic: a scam cue never lowers friction).
 - **NO_HOLD** otherwise.
 
 High-risk cues: URGENCY, SECRECY, AUTHORITY, STORY_CHANGE, COACHING, REMOTE_CONTROL.
