@@ -1,0 +1,19 @@
+# Fast and Fraudless backend (FastAPI :8790). Installed by scripts/supervise/install.sh (@HOME@ is replaced).
+[Unit]
+Description=Fast and Fraudless backend (:8790)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@HOME@/tripwire
+ExecStart=/bin/bash @HOME@/tripwire/scripts/backend_run.sh
+Restart=always
+RestartSec=2
+# SIGTERM to uvicorn only, then SIGKILL to anything left (open SSE streams stall a graceful stop, E-024)
+KillMode=mixed
+TimeoutStopSec=5
+StandardOutput=append:@HOME@/tw/backend.log
+StandardError=append:@HOME@/tw/backend.log
+
+[Install]
+WantedBy=default.target

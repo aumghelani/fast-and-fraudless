@@ -1,0 +1,20 @@
+# GPU ring finder in the rapids container, in the foreground so systemd sees it die (--resume --loop).
+# Installed by scripts/supervise/install.sh (@HOME@ is replaced). sg: the running user manager may predate
+# the docker group membership.
+[Unit]
+Description=Fast and Fraudless GPU ring finder (rapids container)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@HOME@/tripwire
+ExecStart=/usr/bin/sg docker -c "exec /bin/bash @HOME@/tripwire/scripts/supervise/worker_run.sh"
+ExecStopPost=-/usr/bin/sg docker -c "/bin/bash @HOME@/tripwire/scripts/supervise/worker_run.sh stop"
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
+StandardOutput=append:@HOME@/tw/ringfinder.log
+StandardError=append:@HOME@/tw/ringfinder.log
+
+[Install]
+WantedBy=default.target

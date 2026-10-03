@@ -1,0 +1,18 @@
+# Health checks + repairs for backend, ring finder, ASR, vLLM, OpenClaw gateway (scripts/supervise/watchdog.sh).
+# Installed by scripts/supervise/install.sh (@HOME@ is replaced).
+[Unit]
+Description=Fast and Fraudless watchdog
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@HOME@/tripwire
+ExecStart=/usr/bin/sg docker -c "exec /bin/bash @HOME@/tripwire/scripts/supervise/watchdog.sh"
+Restart=always
+RestartSec=2
+TimeoutStopSec=10
+StandardOutput=null
+StandardError=append:@HOME@/tw/watchdog.log
+
+[Install]
+WantedBy=default.target
