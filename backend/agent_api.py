@@ -108,7 +108,8 @@ def case_pack(ring: dict, formats: dict[str, str] | None = None) -> str:
         "Use only numbers that appear above. Every id and amount you write is checked against the database.",
         f"Submit: POST /api/agent/sar with ring_id={rid} and narrative=<your SAR narrative>.",
     ]
-    return "\n".join(L)
+    # one line per entry: a newline planted in a field cannot fake a new rule line
+    return "\n".join(str(x).replace("\r", " ").replace("\n", " ") for x in L)
 
 
 def _get_case(ring_id: str) -> PlainTextResponse:
