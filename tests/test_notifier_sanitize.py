@@ -108,3 +108,10 @@ def test_cmd_template_override(monkeypatch):
                        "--target {target} --message {text}")
     cmd = notifier._openclaw_cmd("telegram", "111", "Call 0412: HOLD advised")
     assert cmd[-2:] == ["--message", "Call 0412: HOLD advised"]
+
+
+def test_ring_ids_survive_but_pii_does_not():
+    from backend.notifier import sanitize
+    assert sanitize("Ring R-24434 escalated - SAR draft ready") == "Ring R-24434 escalated - SAR draft ready"
+    out = sanitize("Call 0412: HOLD advised. Payee 802225A40 $40,000 5551234567")
+    assert "802225A40" not in out and "40,000" not in out and "5551234567" not in out

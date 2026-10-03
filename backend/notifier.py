@@ -53,7 +53,7 @@ _RULES: list[tuple[re.Pattern, str]] = [
     # IBM AML account ids are 9 hex chars (e.g. 802225A40); also IBAN-like strings
     (re.compile(r"\b(?=[0-9A-Fa-f]*\d)(?=[0-9A-Fa-f]*[A-Fa-f])[0-9A-Fa-f]{8,}\b"), "[acct]"),
     (re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b"), "[acct]"),
-    (re.compile(r"\b\d{5,}\b"), "[number]"),
+    (re.compile(r"(?<!R-)\b\d{5,}\b"), "[number]"),   # ring ids (R-24434) are case refs, not PII
     (re.compile(r"\bT\d{2,}\b"), "[txn]"),
     (re.compile(r"\b(?:Mr|Mrs|Ms|Miss|Dr|Sir|Madam)\.?\s+[A-Z][a-z][a-z'’]*(?:-[A-Za-z][a-z'’]*)*"), "[name]"),
 ]
