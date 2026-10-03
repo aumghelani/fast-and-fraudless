@@ -160,3 +160,25 @@ IBM AML data is synthetic and labelled. Margaret, David and the 10 calls are fic
   - CSV case export.
 - **White-label:** `config/branding.json`.
 - **New collections:** `inbound_payments`, `inbound_transactions`, `webhook_deliveries`.
+
+## 12. Self-healing (nobody restarts anything by hand)
+
+Any process can be killed with `kill -9` and comes back by itself, continuing where it stopped. Operations: RUNBOOK.md. Proof on video: `scripts/demo_kill_resume.sh`.
+
+| What dies | Who brings it back | Resumes from |
+|---|---|---|
+| backend (uvicorn) | systemd user unit `tw-backend`, `Restart=always`, 2 s | Mongo (`health.restored=true`) |
+| GPU ring finder | `tw-worker` runs it in the `rapids` container with `docker exec` in the foreground, so systemd sees it die | Mongo: replay clock, ring ids, flagged rows, eval counters |
+| agent run (`nemoclaw … agent`) | agent bridge: a run killed by a signal goes back to the front of the queue at once | case timeline: "resumed after interruption (attempt n)" |
+| agent run that failed | agent bridge: retry after 30 / 120 / 300 s, at most 3 times | — |
+| alive but hung (backend, ASR, worker, OpenClaw gateway) | `tw-watchdog`, every 15 s; repair after 3 failed checks | — |
+| containers (mongo, vllm, asr, rapids) | Docker `--restart unless-stopped` | — |
+| a second backend left over (E-024) | bridge lease (it waits in standby) + watchdog kills it | — |
+
+**Ring finder.** Without `--reset` it resumes when Mongo has a tick: cursor from `meta.tick`, counter from the highest `R-<n>`, hub episodes from a per-cycle checkpoint (`watch_state.ringfinder`, hubs still inside the window), flagged rows from `transactions`, escalated rows from `transactions.esc`, label counters recomputed from those rows. Heartbeat `meta.worker.heartbeat` every cycle. `--loop`: after the data ends it stays alive and writes tick `status: "live-idle"`. Checked on HI-Small: a hard exit, a SIGKILL mid-run and three chained exits all end with the same rings, escalations and recall as an uninterrupted run (E-030). A fresh replay: `scripts/worker_up.sh` (flag file `~/tw/worker.reset`).
+
+**Agent bridge.** A sweeper runs at start-up, every 15 s and after every run. At start-up nothing can be running in the new process, so every `woke`/`investigating` case is a leftover and goes back to the queue first. Later sweeps re-queue cases with no progress for `agent_timeout_s + 60` s, plus due retries. Statuses stay inside the README contract (a resumed case shows `woke`). New case fields: `attempts` (resumes, at most 10 interruptions), `fails` (real errors, at most 3), `retry_at_ms`, `retryable`, `interrupted`. Only the backend holding the lease `watch_state.agent_bridge_lease` (pid + host, renewed every sweep) runs agents. Real-time first (E-019) is unchanged.
+
+**Watchdog** (`scripts/supervise/watchdog.sh`). Checks `/api/health`, more than one backend process, vLLM `/v1/models` (report only: a restart costs minutes), ASR `/health` (`docker restart asr`), worker heartbeat (restart `tw-worker`), OpenClaw gateway on 127.0.0.1:18789 (`nemoclaw tripwire recover`, at most every 5 min, because it takes the host lock). It also counts the restarts systemd and Docker did on their own. Mongo `meta.watchdog` holds `{checks, recoveries, last_recovery, history}`, so "self-healed N times" is a real count. Log: `~/tw/watchdog.log`.
+
+**Why systemd + `docker exec`** rather than making the worker the container's main process: one supervisor and one log for every process; a constant 2 s restart (Docker backs off exponentially); the `rapids` container stays up for `--bench` and tests; a fresh replay needs no container rebuild. `docker exec` forwards no signals, so `worker_run.sh` stops any leftover run before it starts and after the unit stops. The user manager on the box started before `dell` joined the `docker` group, so these units run under `sg docker` (E-029).
