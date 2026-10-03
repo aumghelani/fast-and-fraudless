@@ -95,7 +95,7 @@ export function CallScene() {
         <div className="flex flex-wrap gap-2">
           <Chip>Synthetic customer</Chip>
           {call.source === 'replay' && <Chip>Replay</Chip>}
-          {call.cue_source?.includes('fallback') && <Chip tone="verify">Keyword fallback</Chip>}
+          {call.cue_source?.includes('fallback') && <Chip>Keyword fallback</Chip>}
         </div>
       </Reveal>
       <Reveal order={1} className="col-span-7 flex min-h-0 flex-col gap-6">

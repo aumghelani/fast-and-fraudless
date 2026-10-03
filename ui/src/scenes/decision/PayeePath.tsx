@@ -7,7 +7,7 @@ import { DASH } from '../../lib/format'
 
 const MAX = 8
 const Y = 180
-const X = { cust: 60, payee: 330, hub: 560 }
+const X = { cust: 40, payee: 290, hub: 500 }
 const ARC_R = 120
 
 const tail = (s: string) => (s.length > 8 ? s.slice(-8) : s)
