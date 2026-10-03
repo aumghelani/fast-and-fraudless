@@ -38,7 +38,7 @@ log "watchdog up (every ${EVERY}s, repair after ${N} failed checks)"
 while true; do
   # backend: systemd restarts a dead one; a hung one gets restarted here
   if active tw-backend; then
-    curl -fsS -m 5 -o /dev/null http://127.0.0.1:8790/api/health && b=ok || b=fail
+    curl -fs -m 5 -o /dev/null http://127.0.0.1:8790/api/health && b=ok || b=fail
     if check backend "$b"; then
       systemctl --user restart tw-backend; event backend "systemctl restart tw-backend" "health failed ${N}x" $?
       grace backend 60
@@ -56,11 +56,11 @@ while true; do
   nb="$(pgrep -fc "$BACKEND_PAT")"; [ "$nb" -gt 1 ] && log "ALERT: $nb backend processes"
 
   # vLLM: report only (a restart costs minutes; Docker restarts a crashed container)
-  curl -fsS -m 5 -o /dev/null http://127.0.0.1:8000/v1/models && v=ok || v=fail
+  curl -fs -m 5 -o /dev/null http://127.0.0.1:8000/v1/models && v=ok || v=fail
   check vllm "$v" || true
 
   # ASR
-  curl -fsS -m 5 -o /dev/null http://127.0.0.1:8791/health && a=ok || a=fail
+  curl -fs -m 5 -o /dev/null http://127.0.0.1:8791/health && a=ok || a=fail
   if check asr "$a"; then
     docker restart asr >/dev/null; event asr "docker restart asr" "health failed ${N}x" $?
     grace asr 120
