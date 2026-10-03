@@ -25,7 +25,7 @@ log = logging.getLogger("tripwire.asr")
 def quiet_cut(x: np.ndarray, sr: int, max_s: float, search_s: float = 2.0) -> int:
     """Sample index in [max_s - search_s, max_s] with the lowest 100 ms energy (a pause between words)."""
     hi = int(max_s * sr)
-    if len(x) <= hi:
+    if len(x) < hi:
         return len(x)
     lo = max(int((max_s - search_s) * sr), 1)
     frame = int(0.1 * sr)
