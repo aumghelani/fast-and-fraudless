@@ -24,6 +24,7 @@ import threading
 import time
 
 from .bus import bus
+from . import nemoclaw_cli
 from .config import settings
 from .db import db, load_token, now_ms, save_token
 
@@ -214,7 +215,7 @@ def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0
     t0_ms = now_ms()
     stdout, err = "", None
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=settings.agent_timeout_s)
+        p = nemoclaw_cli.run(cmd, timeout=settings.agent_timeout_s)  # serialized (E-014)
         stdout = p.stdout or ""
         if p.returncode != 0:
             err = f"agent exited {p.returncode}: {(p.stderr or p.stdout or '').strip()[-300:]}"

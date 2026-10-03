@@ -30,6 +30,7 @@ import time
 from collections import deque
 from typing import Any
 
+from . import nemoclaw_cli
 from .config import settings
 
 DEDUPE_S = 30.0
@@ -134,8 +135,8 @@ def _openclaw_cmd(channel: str, target: str, text: str) -> list[str]:
 def _send_openclaw(channel: str, target: str, text: str) -> tuple[bool, str]:
     cmd = _openclaw_cmd(channel, target, text)
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=float(os.environ.get("TW_NOTIFY_TIMEOUT_S", "120")))
+        p = nemoclaw_cli.run(cmd, timeout=float(os.environ.get("TW_NOTIFY_TIMEOUT_S", "120")),
+                             urgent=True)  # serialized, ahead of queued investigations (E-014)
     except FileNotFoundError:
         return False, f"{cmd[0]} not found"
     except subprocess.TimeoutExpired:

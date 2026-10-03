@@ -5,6 +5,7 @@ Run on the box:  .venv/bin/uvicorn backend.app:app --host 0.0.0.0 --port 8790
 from __future__ import annotations
 
 import asyncio
+import os
 import importlib
 import threading
 import time
@@ -55,8 +56,10 @@ async def lifespan(app: FastAPI):
     worker_feed.start()
     egress.start()
     telemetry.start()
-    if agent_bridge and hasattr(agent_bridge, "start"):
+    if agent_bridge and hasattr(agent_bridge, "start") and os.environ.get("TW_AGENT_BRIDGE", "on") != "off":
         agent_bridge.start()
+    elif agent_bridge:
+        print("[app] agent bridge disabled (TW_AGENT_BRIDGE=off)", flush=True)
     threading.Thread(target=_health_loop, name="health", daemon=True).start()
     print(f"[app] Tripwire backend up on :{settings.port} (restored={_restored['value']})", flush=True)
     yield
