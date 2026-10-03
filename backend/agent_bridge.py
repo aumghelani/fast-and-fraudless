@@ -46,9 +46,7 @@ INLINE_PROMPT = (
     "SAR narrative of at most 180 words in FinCEN style (who, what, when, where, why, how). Cite every "
     "transaction you mention as its id followed by its exact amount and currency, copied from the case file "
     "(for example: T123 9,524.21 USD). Never invent ids, amounts or names. Do not file anything; an analyst "
-    "decides.
-
-{case}"
+    "decides." + chr(10) * 2 + "{case}"
 )
 TIMELINE_MAX = 50
 _TERMINAL = {"sar_drafted", "approved", "rejected"}
