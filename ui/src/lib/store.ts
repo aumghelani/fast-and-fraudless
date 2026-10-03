@@ -240,9 +240,13 @@ async function hydrate() {
     return
   }
   hydrating = true
+  let ok = false
   try {
     const r = await fetch('/api/state', { cache: 'no-store' })
-    if (r.ok) applySnapshot(await r.json())
+    if (r.ok) {
+      applySnapshot(await r.json())
+      ok = true
+    }
   } catch (e) {
     console.warn('[ui] hydrate failed', e)
   } finally {
@@ -253,7 +257,7 @@ async function hydrate() {
     if (hydrateAgain) {
       hydrateAgain = false
       hydrate()
-    }
+    } else if (!ok && !state.hydrated) window.setTimeout(hydrate, 3000) // first load failed: keep trying
   }
 }
 

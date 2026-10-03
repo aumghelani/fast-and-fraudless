@@ -9,9 +9,13 @@ import { Eyebrow, Kbd } from '../ui/primitives'
 import { DUR, EASE } from '../ui/tokens'
 
 export function DetailsDrawer() {
-  const scene = useScene()
+  const current = useScene()
   const open = useStore((s) => s.story.details)
   const ref = useRef<HTMLElement>(null)
+  // keep the scene the drawer opened on while it fades out after a scene change
+  const opened = useRef(current)
+  if (open) opened.current = current
+  const scene = opened.current
   const Details = registry[scene].Details
 
   useEffect(() => {
