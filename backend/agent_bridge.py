@@ -21,6 +21,7 @@ import itertools
 import json
 import os
 import queue
+import re
 import socket
 import subprocess
 import threading
@@ -38,11 +39,13 @@ from .prompts import INLINE_PROMPT, WAKE_PROMPT  # noqa: E402
 AGENT_MODE = os.environ.get("TW_AGENT_MODE", "inline")
 TIMELINE_MAX = 50
 _TERMINAL = {"sar_drafted", "approved", "rejected"}
-RESUME_MAX = int(os.environ.get("TW_AGENT_RESUME_MAX", "3"))    # re-queues per case
+RESUME_MAX = int(os.environ.get("TW_AGENT_RESUME_MAX", "3"))    # retries after real errors
 BACKOFF_S = (30, 120, 300)                                       # error -> retry delays
+INTERRUPT_MAX = 10                      # resumes after kills/restarts (not the case's fault, but bounded)
 SWEEP_S = float(os.environ.get("TW_AGENT_SWEEP_S", "15"))
 LEASE_KEY = "agent_bridge_lease"
 RESUME_PRIO = -1e300                    # interrupted runs go first (a forced demo run is -inf)
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 _q: queue.PriorityQueue = queue.PriorityQueue()
 _seq = itertools.count()
@@ -246,7 +249,8 @@ def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0
         p = nemoclaw_cli.run(cmd, timeout=settings.agent_timeout_s)  # serialized (E-014)
         stdout, rc = p.stdout or "", p.returncode
         if p.returncode != 0:
-            err = f"agent exited {p.returncode}: {(p.stderr or p.stdout or '').strip()[-300:]}"
+            out = _ANSI.sub("", p.stderr or p.stdout or "").strip()
+            err = f"agent exited {p.returncode}" + (f": {out[-300:]}" if out else "")
     except FileNotFoundError:
         err, permanent = f"nemoclaw not found at {settings.nemoclaw_bin}", True
     except subprocess.TimeoutExpired as e:
@@ -286,20 +290,25 @@ def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0
 
 
 def _failed(ring_id: str, why: str, killed: bool = False, retryable: bool = True) -> None:
-    """Mark a run without a SAR; schedule a retry unless the error is permanent or retries are used up."""
+    """Mark a run without a SAR. Killed runs resume at once; real errors retry after 30/120/300 s, 3 times."""
     try:
-        att = int((db().cases.find_one({"_id": ring_id}, {"attempts": 1}) or {}).get("attempts") or 0)
+        c = db().cases.find_one({"_id": ring_id}, {"attempts": 1, "fails": 1}) or {}
     except Exception:
-        att = 0
+        c = {}
+    att, fails = int(c.get("attempts") or 0), int(c.get("fails") or 0) + (0 if killed else 1)
     msg = f"error: no SAR submitted ({why})"
-    if retryable and att < RESUME_MAX:
-        delay = 0 if killed else BACKOFF_S[min(att, len(BACKOFF_S) - 1)]
-        msg += "; run was killed, resuming" if killed else f"; retry in {delay} s"
-        update_case(ring_id, msg, status="error", keep_if=_TERMINAL, retryable=True, interrupted=killed,
-                    retry_at_ms=now_ms() + delay * 1000)
-    else:
-        msg += f"; gave up after {att + 1} attempts" if retryable else ""
+    if not retryable:
         update_case(ring_id, msg, status="error", keep_if=_TERMINAL, retryable=False)
+    elif killed and att < INTERRUPT_MAX:
+        update_case(ring_id, msg + "; run was killed, resuming", status="error", keep_if=_TERMINAL,
+                    retryable=True, interrupted=True, retry_at_ms=now_ms())
+    elif not killed and fails <= RESUME_MAX:
+        delay = BACKOFF_S[min(fails, len(BACKOFF_S)) - 1]
+        update_case(ring_id, msg + f"; retry in {delay} s", status="error", keep_if=_TERMINAL, retryable=True,
+                    interrupted=False, fails=fails, retry_at_ms=now_ms() + delay * 1000)
+    else:
+        update_case(ring_id, msg + f"; gave up after {att + 1} runs", status="error", keep_if=_TERMINAL,
+                    retryable=False, fails=fails)
 
 
 # ------------------------------------------------------------------ self-healing
@@ -348,27 +357,27 @@ def _sweep(startup: bool) -> int:
     now, n = now_ms(), 0
     stuck_ms = (settings.agent_timeout_s + 60) * 1000
     cur = db().cases.find({"status": {"$in": ["woke", "investigating", "error"]}},
-                          {"status": 1, "attempts": 1, "retry_at_ms": 1, "retryable": 1, "interrupted": 1,
-                           "timeline": {"$slice": -1}})
+                          {"status": 1, "attempts": 1, "fails": 1, "retry_at_ms": 1, "retryable": 1,
+                           "interrupted": 1, "timeline": {"$slice": -1}})
     for c in list(cur):
         rid = c["_id"]
         if _busy(rid):
             continue
-        att = int(c.get("attempts") or 0)
+        att, fails = int(c.get("attempts") or 0), int(c.get("fails") or 0)
         last = int(((c.get("timeline") or [{}])[-1] or {}).get("ts") or 0)
         if c.get("status") == "error":
-            if c.get("retryable") is False or att >= RESUME_MAX:
+            if c.get("retryable") is False or fails > RESUME_MAX:
                 continue
             due = c.get("retry_at_ms")
-            if due is None:
-                due = last + BACKOFF_S[min(att, len(BACKOFF_S) - 1)] * 1000
+            if due is None:   # errors recorded before self-healing existed: first retry after 30 s
+                due = last + BACKOFF_S[0] * 1000
             interrupted = bool(c.get("interrupted"))
             if now < due or (not interrupted and _q.qsize() >= 2):   # old failures trickle in behind live rings
                 continue
             n += _resume(rid, att + 1, "after interruption" if interrupted else "after error", front=interrupted)
         elif startup or now - last > stuck_ms:
-            if att >= RESUME_MAX:
-                update_case(rid, f"error: interrupted after {att} resumes; not resuming", status="error",
+            if att >= INTERRUPT_MAX:
+                update_case(rid, f"error: interrupted {att} times; not resuming", status="error",
                             keep_if=_TERMINAL, retryable=False)
                 continue
             n += _resume(rid, att + 1, "after interruption", front=True)
