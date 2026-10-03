@@ -17,14 +17,14 @@
 - [x] backend change stream → agent wake via `nemoclaw tripwire agent`
 - [x] agent investigates + drafts SAR (inline mode, E-017): R-5338 55 s, 13/13 citations verified
 - [x] SAR validator marks citations
-- [ ] Notifier: Telegram (+ Slack) "ring flagged" alert
+- [x] Notifier: Telegram alerts from the sandbox (Slack: no tokens yet)
 
 ## 2. Call loop (target 14:30)
 - [x] ASR windows (≤10 s) from mic and REPLAY
 - [x] LLM cue extraction (JSON, thinking off)
 - [x] rules → HOLD/VERIFY/NO_HOLD + reasons + questions
 - [x] payee check against ring map (Margaret → 802225A40 → R-102)
-- [ ] banker decision + alert
+- [x] banker decision + content-free HOLD alert
 
 ## 3. Proof + numbers (target 15:30)
 - [x] egress tail (98 events, DENIED lines incl. sandbox->backend before preset) + exfil endpoint
@@ -32,12 +32,16 @@
 - [x] telemetry SSE (GPU util/temp/power + unified memory)
 - [x] CPU vs GPU bench: 31.9M rows load+detect CPU 37.9 s vs GPU 16.5 s (GPU also serving LLM); idle GPU load 6.3 s
 - [x] eval: rings recovered x/total, precision; calls x/5 scams, false holds y/5
-- [x] backend restart restores state from Mongo (health.restored=true); UI banner pending
+- [x] self-healing under systemd + watchdog: backend back in 4.5 s, GPU worker resumes exactly (23 s), killed agent run re-queued in 2 s (demo_kill_resume.sh)
 
 ## 3b. Bank integration (verified on box 13:3x)
 - [x] ISO 20022 pacs.008: Margaret's wire → RING_MATCH R-5338 → HOLD; rent → CLEAR; pain.001 batch screened per payment
 - [x] SAR draft export (FinCEN-style XML, DRAFT/NOT FILED) · CSV case export · branding · health
 - [ ] webhooks demo (needs TW_WEBHOOKS + secret)
+
+## 3c. Can't be talked into anything (verified on box)
+- [x] red team 23 attacks: 0 decisions changed, 0 invented facts passed (after E-026 fix), 0 data out, 0 unsafe output
+- [x] rules monotonic (D-13)
 
 ## 4. UI (instructions from Aum)
 - [ ] Control Room per instructions
