@@ -1,5 +1,5 @@
-// Small building blocks shared by every scene. Flat, calm, six type sizes.
-import { useLayoutEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+// Small building blocks shared by the page. Light, flat, calm: white cards, pastel pills, mono labels.
+import { useLayoutEffect, useRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react'
 import { animate } from 'motion'
 import { motion } from 'motion/react'
 import { DASH, cx } from '../lib/format'
@@ -12,9 +12,9 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const VARIANT = {
-  primary: 'bg-ink text-bg hover:bg-ink/90',
-  hold: 'bg-hold-fill text-white hover:bg-hold-fill/90',
-  ghost: 'border border-line-2 bg-transparent text-ink hover:border-mute hover:bg-surface-2',
+  primary: 'bg-accent text-white shadow-soft hover:bg-accent-deep',
+  hold: 'bg-hold-fill text-white shadow-soft hover:bg-hold-deep',
+  ghost: 'border border-line bg-surface text-ink shadow-soft hover:border-line-2 hover:bg-surface-2',
 } as const
 
 export function Button({ variant = 'primary', size = 'md', kbd, className, children, type = 'button', ...rest }: ButtonProps) {
@@ -23,7 +23,7 @@ export function Button({ variant = 'primary', size = 'md', kbd, className, child
       type={type}
       className={cx(
         'inline-flex shrink-0 items-center justify-center gap-3 whitespace-nowrap rounded-lg text-body font-semibold',
-        'transition-colors duration-200 disabled:opacity-40',
+        'transition-colors duration-200 disabled:opacity-40 disabled:shadow-none',
         size === 'lg' ? 'h-14 px-6' : 'h-12 px-5',
         VARIANT[variant],
         className,
@@ -40,7 +40,7 @@ export function Kbd({ children, className }: { children: ReactNode; className?: 
   return (
     <kbd
       className={cx(
-        'inline-flex h-6 min-w-6 items-center justify-center rounded border border-line-2 px-1.5 font-mono text-meta leading-none text-inherit',
+        'inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-line-2 px-1.5 font-mono text-meta font-medium leading-none text-inherit',
         className,
       )}
     >
@@ -52,26 +52,22 @@ export function Kbd({ children, className }: { children: ReactNode; className?: 
 type Tone = 'neutral' | 'accent' | 'hold' | 'verify' | 'clear'
 
 const TONE: Record<Tone, string> = {
-  neutral: 'outline-line-2 text-ink-2',
-  accent: 'outline-accent/60 bg-accent/10 text-accent',
-  hold: 'outline-hold/60 bg-hold/10 text-hold',
-  verify: 'outline-verify/60 bg-verify/10 text-verify',
-  clear: 'outline-clear/60 bg-clear/10 text-clear',
+  neutral: 'bg-surface-2 text-ink-2',
+  accent: 'bg-accent-soft text-accent-deep',
+  hold: 'bg-hold-soft text-hold-deep',
+  verify: 'bg-verify-soft text-verify-deep',
+  clear: 'bg-clear-soft text-clear-deep',
 }
 
-/** Badge: a slanted racing decal in condensed caps. Pass className "font-mono" for ids (kept upright). */
+/** Badge: a soft pastel pill in mono (Approved / Review / Decline style). */
 export function Chip({ tone = 'neutral', children, className, title }: {
   tone?: Tone; children: ReactNode; className?: string; title?: string
 }) {
-  const mono = /(^|\s)font-mono(\s|$)/.test(className ?? '')
   return (
     <span
       title={title}
       className={cx(
-        'inline-flex items-center gap-1.5 whitespace-nowrap outline-1 -outline-offset-1 outline-solid',
-        mono
-          ? 'rounded-lg px-2.5 py-0.5 text-meta'
-          : 'decal trim-cap rounded-sm px-3 py-1.5 font-num text-body font-semibold uppercase leading-none tracking-[0.06em]',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 font-mono text-meta font-medium leading-tight',
         TONE[tone],
         className,
       )}
@@ -81,8 +77,51 @@ export function Chip({ tone = 'neutral', children, className, title }: {
   )
 }
 
+/** Small round status dot (tone colour). */
+export function Dot({ tone = 'neutral', className }: { tone?: Tone; className?: string }) {
+  const bg = { neutral: 'bg-mute', accent: 'bg-accent', hold: 'bg-hold', verify: 'bg-verify', clear: 'bg-clear' }[tone]
+  return <span aria-hidden className={cx('inline-block h-2 w-2 shrink-0 rounded-full', bg, className)} />
+}
+
+/** Small mono uppercase label (card titles, field names). */
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('text-meta font-semibold uppercase tracking-[0.08em] text-mute', className)}>{children}</div>
+  return (
+    <div className={cx('font-mono text-meta font-medium uppercase tracking-[0.06em] text-ink-2', className)}>{children}</div>
+  )
+}
+
+/** White card: 12px radius, soft two-layer shadow. */
+export function Card({ children, className, ...rest }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cx('card', className)} {...rest}>
+      {children}
+    </div>
+  )
+}
+
+/**
+ * A titled card. bar = the solid indigo header bar with a white mono title (hero panels only);
+ * without it the title is a quiet mono eyebrow, so the bottom row stays calm.
+ */
+export function Panel({ title, right, bar = false, children, className, bodyClassName }: {
+  title: ReactNode; right?: ReactNode; bar?: boolean; children?: ReactNode; className?: string; bodyClassName?: string
+}) {
+  return (
+    <section className={cx('card flex min-h-0 flex-col overflow-hidden', className)}>
+      {bar ? (
+        <header className="flex h-11 shrink-0 items-center justify-between gap-3 bg-accent px-5 font-mono text-meta font-semibold text-white">
+          <span className="truncate">{title}</span>
+          {right}
+        </header>
+      ) : (
+        <header className="flex shrink-0 items-center justify-between gap-3 px-5 pt-4">
+          <Eyebrow className="truncate">{title}</Eyebrow>
+          {right}
+        </header>
+      )}
+      <div className={cx('min-h-0 flex-1 p-5', bodyClassName)}>{children}</div>
+    </section>
+  )
 }
 
 const STAT = {
@@ -98,10 +137,10 @@ export function Stat({ value, label, den, size = 'title', note, className }: {
   const [v, d] = STAT[size]
   return (
     <div className={cx('flex flex-col gap-3', className)}>
-      {/* trim-cap: Teko's tall line box would leave a gap between the number and its label */}
-      <div className="tnum flex items-baseline gap-2 font-num font-bold leading-none">
+      {/* trim-cap: trims the line box so the number sits tight on its label */}
+      <div className="tnum flex items-baseline gap-2 font-mono font-semibold leading-none tracking-[-0.03em] text-ink">
         <span className={cx(v, 'trim-cap leading-none')}>{value}</span>
-        {den != null && <span className={cx(d, 'trim-cap font-semibold leading-none text-mute')}>/ {den}</span>}
+        {den != null && <span className={cx(d, 'trim-cap font-medium leading-none text-mute')}>/ {den}</span>}
       </div>
       <div className="text-body text-ink-2">{label}</div>
       {note != null && note !== '' && <div className="text-meta text-mute">{note}</div>}
@@ -143,7 +182,7 @@ export function CountUp({ value, format, className }: {
       el.textContent = fmt.current(value)
     }
   }, [value])
-  return <span ref={ref} className={cx('tnum font-num', className)} />
+  return <span ref={ref} className={cx('tnum font-mono', className)} />
 }
 
 /** Entrance group: fade and rise 12px. order 1 starts 120 ms after order 0. */
@@ -165,7 +204,7 @@ export function Empty({ title, sub, children, className }: {
 }) {
   return (
     <div className={cx('col-span-full flex h-full flex-col items-center justify-center gap-4 text-center', className)}>
-      <div className="font-race text-title">{title}</div>
+      <div className="font-mono text-lead font-semibold text-ink">{title}</div>
       {sub != null && <div className="text-body text-ink-2">{sub}</div>}
       {children != null && <div className="mt-4">{children}</div>}
     </div>

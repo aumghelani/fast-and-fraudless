@@ -1,5 +1,6 @@
 // Calm audio-reactive voice orb: Canvas 2D reading the shared AnalyserNode.
-// Two soft layers, wobble at most 6% of the radius, tone colour eased over 600 ms.
+// Two soft pastel layers on white (no halo), wobble at most 6% of the radius, tone colour eased over 600 ms.
+// Tones come from the CSS colour tokens, so the orb follows the theme.
 // The rAF loop runs only while active; otherwise one static frame is drawn.
 import { useEffect, useRef } from 'react'
 import { getAnalyser } from '../lib/audio'
@@ -20,7 +21,7 @@ type RGB = [number, number, number]
 function toneRgb(t: OrbTone): RGB {
   const v = getComputedStyle(document.documentElement).getPropertyValue(TONE_VAR[t] || TONE_VAR.idle).trim()
   const m = /^#?([0-9a-f]{6})$/i.exec(v)
-  if (!m) return [122, 130, 142]
+  if (!m) return [138, 144, 166] // --color-mute
   const n = parseInt(m[1], 16)
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
@@ -124,14 +125,7 @@ export function VoiceOrb({ tone, active, size }: { tone: OrbTone; active: boolea
       }
 
       const t = now / 1000
-      // soft halo, then two layers
-      g.fillStyle = grad(`h${Rk}${rgb}`, () => {
-        const x = g.createRadialGradient(cx, cy, R * 0.5, cx, cy, R * 1.45)
-        x.addColorStop(0, `rgba(${rgb},0.16)`)
-        x.addColorStop(1, `rgba(${rgb},0)`)
-        return x
-      })
-      g.fillRect(0, 0, w, h)
+      // two layers, no halo (flat light theme)
       for (let L = 0; L < 2; L++) {
         const pts = 96
         const phase = t * (0.25 + L * 0.12) * (L ? -1 : 1)
@@ -152,13 +146,13 @@ export function VoiceOrb({ tone, active, size }: { tone: OrbTone; active: boolea
         g.closePath()
         g.fillStyle = grad(`f${L}${Rk}${rgb}`, () => {
           const x = g.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.05, cx, cy, R * 1.1)
-          x.addColorStop(0, `rgba(${rgb},${L ? 0.34 : 0.22})`)
-          x.addColorStop(1, `rgba(${rgb},0.04)`)
+          x.addColorStop(0, `rgba(${rgb},${L ? 0.3 : 0.16})`)
+          x.addColorStop(1, `rgba(${rgb},0.06)`)
           return x
         })
         g.fill()
-        g.lineWidth = 1.25
-        g.strokeStyle = `rgba(${rgb},${L ? 0.5 : 0.3})`
+        g.lineWidth = 1.5
+        g.strokeStyle = `rgba(${rgb},${L ? 0.75 : 0.35})`
         g.stroke()
       }
     }

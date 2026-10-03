@@ -1,4 +1,4 @@
-// System overlays: a steady red frame while offline, and a queue of toasts (restored, self-healed).
+// System overlays: a steady red frame while offline, and a queue of white toasts (restored, self-healed).
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useStore } from '../lib/store'
@@ -73,16 +73,17 @@ function Toasts() {
   }, [current])
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-22 z-40 flex justify-center" role="status" aria-live="polite">
+    <div className="pointer-events-none fixed inset-x-0 top-20 z-40 flex justify-center" role="status" aria-live="polite">
       <AnimatePresence mode="wait">
         {current && (
           <motion.div
             key={current.id}
-            className="rounded-xl border border-accent bg-surface-2 px-6 py-3 text-body text-ink"
+            className="card flex items-center gap-3 px-5 py-3 border border-line font-mono text-meta text-ink"
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0, transition: { duration: 0.3, ease: EASE } }}
             exit={{ opacity: 0, y: -8, transition: { duration: 0.3 } }}
           >
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-accent" />
             {current.text}
           </motion.div>
         )}

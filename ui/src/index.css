@@ -2,28 +2,43 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 
-/* Fast and Fraudless: asphalt base, carbon panels, chrome text, one nitro-blue accent.
-   Red, amber and green only for decisions. Racing fonts only for the wordmark, titles, numbers and badges. */
+/* Fast and Fraudless, light: cool white page, white cards, ink text, one indigo accent.
+   Red, amber and green only for decisions. JetBrains Mono for labels and numbers, Inter for sentences,
+   Racing Sans One only in the wordmark. */
 @theme static {
   --font-sans: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, Consolas, monospace;
   --font-race: "Racing Sans One", "Inter Variable", "Segoe UI", system-ui, sans-serif;
   --font-num: "Teko", "Inter Variable", "Segoe UI", system-ui, sans-serif;
 
-  --color-bg: #0a0c0f;
-  --color-surface: #12151a;
-  --color-surface-2: #171b21;
-  --color-line: #242a32;
-  --color-line-2: #313843;
-  --color-ink: #d7dce3;
-  --color-ink-2: #a9b0ba;
-  --color-mute: #7a828e;
-  --color-faint: #3a414b;
-  --color-accent: #19b5fe;
-  --color-hold: #ff2d3d;
-  --color-hold-fill: #d3182a;
-  --color-verify: #ffb000;
-  --color-clear: #22d37a;
+  --color-bg: #f4f5fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef0f6;
+  --color-line: #e3e6ef;
+  --color-line-2: #d3d7e3;
+  --color-ink: #161a2e;
+  --color-ink-2: #4a5068;
+  --color-mute: #8a90a6;
+  --color-faint: #c9cedb;
+  --color-accent: #4f46e5;
+  --color-hold: #e5484d;
+  --color-hold-fill: #d93036;
+  --color-verify: #d48a00;
+  --color-clear: #17a35a;
+
+  /* pastel fills for chips and soft states */
+  --color-accent-soft: #ecebfd;
+  --color-hold-soft: #fdecec;
+  --color-verify-soft: #fff4d6;
+  --color-clear-soft: #e5f6ec;
+  /* darker text on those fills, so small type stays readable */
+  --color-accent-deep: #4338ca;
+  --color-hold-deep: #c4292e;
+  --color-verify-deep: #8f5d00;
+  --color-clear-deep: #11834a;
+
+  --shadow-card: 0 1px 2px rgb(22 26 46 / 0.06), 0 8px 28px rgb(22 26 46 / 0.07);
+  --shadow-soft: 0 1px 2px rgb(22 26 46 / 0.06);
 
   /* old names, so untouched files still render */
   --color-panel: var(--color-surface);
@@ -63,6 +78,12 @@ body,
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "tnum" 1, "cv11" 1;
   overflow: hidden;
+  color-scheme: light;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
 }
 
 /* Root size: 1920 wide -> 16px, 1440 wide -> 12px. Everything is in rem so the layout scales. */
@@ -81,24 +102,26 @@ html {
   letter-spacing: 0.01em;
 }
 
-/* chrome lettering for the wordmark */
+/* retired racing effects: the class names stay so older markup still renders, flat and upright */
 .chrome-text {
-  background: linear-gradient(180deg, #f4f6f9 0%, #9aa3af 55%, #e6eaef 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-stroke: 0.04em rgb(5 7 10 / 0.85);
-  paint-order: stroke fill;
+  color: var(--color-ink);
 }
 
-/* a faint nitro-blue edge, static */
 .nitro-edge {
-  filter: drop-shadow(0 0 0.3rem color-mix(in srgb, var(--color-accent) 35%, transparent));
+  filter: none;
 }
 
-/* racing-decal slant for rail steps and badges */
 .decal {
-  transform: skewX(-8deg);
+  transform: none;
+}
+
+/* white card: 12px radius and the soft two-layer shadow (components layer, so utilities can override it) */
+@layer components {
+  .card {
+    background: var(--color-surface);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-card);
+  }
 }
 
 /* trims a line box to cap height so condensed caps sit centred in a badge */
@@ -153,9 +176,8 @@ mark {
   }
 }
 
-/* Subtle dot-grid canvas behind the stage (CSS only, no per-dot elements) */
+/* Very faint dot grid on the page (ink at 5%, 22px; CSS only, no per-dot elements) */
 .dot-grid {
-  background-image: radial-gradient(rgb(215 220 227 / 0.09) 1px, transparent 1.2px);
+  background-image: radial-gradient(rgb(22 26 46 / 0.05) 1.2px, transparent 1.4px);
   background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, #000 35%, transparent 100%);
 }
