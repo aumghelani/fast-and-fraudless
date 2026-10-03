@@ -1,9 +1,4 @@
-"""Real-time first: a live call outranks background investigations.
-
-The call guard needs Nemotron answers in ~1 s. A ring investigation sends ~10k prompt tokens and holds the
-GPU for ~55 s, which pushed call-cue requests past their timeout (calls fell back to keywords). While a call
-is active (audio in the last QUIET_S seconds), the agent bridge waits before starting its next run.
-"""
+"""Live calls outrank background investigations: the agent waits while a call is active (E-019)."""
 from __future__ import annotations
 
 import threading
