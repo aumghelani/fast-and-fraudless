@@ -34,6 +34,11 @@
 - [x] eval: rings recovered x/total, precision; calls x/5 scams, false holds y/5
 - [x] backend restart restores state from Mongo (health.restored=true); UI banner pending
 
+## 3b. Bank integration (verified on box 13:3x)
+- [x] ISO 20022 pacs.008: Margaret's wire → RING_MATCH R-5338 → HOLD; rent → CLEAR; pain.001 batch screened per payment
+- [x] SAR draft export (FinCEN-style XML, DRAFT/NOT FILED) · CSV case export · branding · health
+- [ ] webhooks demo (needs TW_WEBHOOKS + secret)
+
 ## 4. UI (instructions from Aum)
 - [ ] Control Room per instructions
 
