@@ -2,7 +2,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { Mic, PhoneOff, Play } from 'lucide-react'
-import { VoiceBars, type BarsTone } from '../components/VoiceBars'
+import { type BarsTone } from '../components/VoiceBars'
+import { VoiceBars3D } from '../components/VoiceBars3D'
 import { DASH, cx, num, usd } from '../lib/format'
 import type { Call } from '../lib/types'
 import { useCtl } from './controls'
@@ -163,7 +164,7 @@ export function CallPanel() {
 
       {/* the voice */}
       <div className="flex w-[380px] shrink-0 flex-col gap-1">
-        <VoiceBars active={view === 'live'} tone={tone} bars={44} className="h-14 w-full" />
+        <VoiceBars3D active={view === "live"} tone={tone} className="h-24 w-full" />
         <div className="flex justify-between font-mono text-[11px] uppercase tracking-[0.06em] text-mute">
           <span>Parakeet · local speech</span>
           <span className="tnum">{showCall && lat != null ? `${num(lat, 2)} s` : DASH}</span>

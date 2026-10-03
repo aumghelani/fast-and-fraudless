@@ -16,7 +16,8 @@
     "lucide-react": "*",
     "motion": "^12",
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
@@ -25,6 +26,7 @@
     "@vitejs/plugin-react": "^5",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite": "^7"
+    "vite": "^7",
+    "@types/three": "^0.186.0"
   }
 }
