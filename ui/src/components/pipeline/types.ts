@@ -48,6 +48,7 @@ export interface PipelineCase {
   risk: number | null // risk index 0-99, derived only from verdict + flagged
   reason: string | null // first reason line from the rules
   ended: boolean
+  bankerDecision?: 'hold' | 'release' | null // set once the banker pressed Hold or Release
 }
 
 export interface PipelineData {

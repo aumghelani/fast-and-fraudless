@@ -54,6 +54,17 @@ export function callTitle(c: Call): string {
   return `Wire${c.amount != null ? ' ' + usd(c.amount) : ''} · ${customerName(c)}`
 }
 
+/** Stable 4-digit display number for a call id ("Wire #0412"). */
+export function wireNo(id: string): string {
+  let h = 2166136261
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619)
+  return String((h >>> 0) % 10000).padStart(4, '0')
+}
+
+export function wireTitle(c: Call): string {
+  return `Wire #${wireNo(c.call_id)}${c.amount != null ? ' · ' + usd(c.amount) : ''}`
+}
+
 function isHigh(x: string): x is HighRiskCue {
   return (HIGH_RISK_CUES as readonly string[]).includes(x)
 }
@@ -116,7 +127,7 @@ export function caseOf(c: Call): PipelineCase {
   const flagged = checks.filter((x) => x.tone === 'flag' || x.tone === 'warn').length
   return {
     id: c.call_id, title: callTitle(c), verdict, checks, flagged, risk: riskIndex(verdict, flagged),
-    reason: c.reasons?.[0] ?? null, ended: !!c.ended,
+    reason: c.reasons?.[0] ?? null, ended: !!c.ended, bankerDecision: c.banker_decision ?? null,
   }
 }
 
@@ -126,7 +137,7 @@ function callStatus(c: Call): QueueStatus {
 
 function callItem(c: Call): QueueItem {
   const src = c.source === 'replay' ? ' · Replay' : c.source === 'mic' ? ' · Live' : ''
-  return { id: c.call_id, kind: 'call', title: callTitle(c), sub: `to ${shortAcct(c.payee_account)}${src}`, status: callStatus(c) }
+  return { id: c.call_id, kind: 'call', title: wireTitle(c), sub: `${customerName(c)}${src}`, status: callStatus(c) }
 }
 
 function paymentItem(p: Integration, i: number): QueueItem | null {
