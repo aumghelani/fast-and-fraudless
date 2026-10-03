@@ -127,6 +127,10 @@ def validate(ring_id: str, narrative: str, *, txns=None, rings=None) -> dict:
         if not near:
             unattached.append((val, raw))
             continue
+        # "T1 (X)": an amount right after an id belongs to that id, even if X matches a neighbour (E-026)
+        if before and min(before)[0] <= 2:
+            attached[min(before)[1]].append((val, raw))
+            continue
         pick = None
         for _, tid in near:
             r = ref_of(tid)
