@@ -133,6 +133,47 @@ export interface Egress {
   dest?: string | null
   policy?: string | null
   reason?: string | null
+  kind?: 'poll' | 'event'
+}
+
+export interface Recovery {
+  ts?: string
+  target?: string
+  action?: string
+  reason?: string
+  ok?: boolean
+}
+
+/** Self-healing status from the watchdog. */
+export interface Watchdog {
+  checks?: Record<string, unknown>
+  recoveries?: number
+  last_recovery?: Recovery
+  history?: Recovery[]
+  ts?: string
+}
+
+/** A payment message screened through the integration layer. */
+export interface Integration {
+  kind?: string
+  ref?: string
+  result?: {
+    screening?: string
+    ring_id?: string | null
+    hops?: number | null
+    hold_recommended?: boolean
+    transactions?: number
+    [k: string]: unknown
+  }
+  [k: string]: unknown
+}
+
+export interface Branding {
+  bank_name?: string
+  product_name?: string
+  primary_color?: string
+  accent_color?: string
+  logo_url?: string | null
 }
 
 export interface Counters {
@@ -176,6 +217,11 @@ export interface EvalData {
   verify_flags?: number
   label?: string
   per_call?: unknown[]
+  // red team (prompt injection)
+  redteam_attempts?: number
+  redteam_decision_changed?: number
+  redteam_invented_facts_passed?: number
+  redteam_data_out?: number
   [k: string]: unknown
 }
 
