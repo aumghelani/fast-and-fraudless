@@ -1,7 +1,4 @@
-"""Tripwire backend: FastAPI on :8790 (see ARCHITECTURE.md §3 and the README contract).
-
-Run on the box:  .venv/bin/uvicorn backend.app:app --host 0.0.0.0 --port 8790
-"""
+"""Fast and Fraudless backend: FastAPI on :8790. Run: .venv/bin/uvicorn backend.app:app --port 8790"""
 from __future__ import annotations
 
 import asyncio
