@@ -26,7 +26,7 @@ export function AgentCard() {
   return (
     <Card title="Investigator agent" right="OpenShell sandbox" className="h-full" bodyClassName="flex flex-col px-5 pb-4 pt-3">
       {!sar ? (
-        <div className="flex flex-1 flex-col justify-center gap-2">
+        <div className="flex min-h-0 flex-1 flex-col justify-center-safe gap-2 overflow-hidden">
           <p className="text-[16px] text-ink-2">Waiting for an escalated ring…</p>
           <p className="font-mono text-[13px] text-mute">
             <span className="tnum">{num(openCases)}</span> open {openCases === 1 ? 'case' : 'cases'}

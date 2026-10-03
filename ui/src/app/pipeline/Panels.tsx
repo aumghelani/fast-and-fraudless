@@ -56,9 +56,10 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
     <Card bar title="Rules & Checks" right={!call ? '—' : checks.length ? `${flagged} of ${checks.length} flagged` : 'listening…'} className="h-full"
       bodyClassName="relative px-4 py-4 [@media(max-height:780px)]:py-2">
       {!call || checks.length === 0 ? (
-        <div className="flex h-full flex-col justify-center gap-3 px-2">
+        <div className="flex h-full min-h-0 flex-col justify-center-safe gap-3 overflow-hidden px-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-3 opacity-60">
+            // placeholder rows; the last two drop out on short screens
+            <div key={i} className={cx('flex shrink-0 items-center gap-3 opacity-60', i > 1 && '[@media(max-height:860px)]:hidden')}>
               <span className="size-2 rounded-full bg-line-2" />
               <span className="h-2.5 rounded-full bg-surface-2" style={{ width: `${46 - i * 6}%` }} />
               <span className="ml-auto h-2.5 w-16 rounded-full bg-surface-2" />

@@ -55,7 +55,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
         </span>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
+      <main className="flex min-h-0 flex-1 flex-col items-center justify-center-safe overflow-hidden text-center">
         <motion.span {...rise(0)} className="mb-6 inline-flex items-center gap-2 rounded-full bg-accent-soft px-4 py-1.5 font-mono text-[13px] text-accent">
           Dell Pro Max GB10 · runs inside the bank
         </motion.span>
