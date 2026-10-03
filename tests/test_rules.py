@@ -158,3 +158,10 @@ def test_extract_json():
         {"cues": [{"cue": "URGENCY", "quote": "a {b}"}]}
     with pytest.raises(LLMError):
         extract_json("no json here")
+
+
+def test_parse_amount_across_window_boundary():
+    assert parse_amount("unless I pay eight. thousand dollars in back taxes") == 8000
+    assert parse_amount("I need to send a wire today. Forty thousand dollars.") == 40000
+    assert parse_amount("$2,100 to Harbor View Rentals") == 2100
+    assert parse_amount("no money words here") is None

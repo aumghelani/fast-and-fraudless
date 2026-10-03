@@ -127,19 +127,22 @@ def asr_ok() -> bool:
         return False
 
 
-def quiet_cut(x: np.ndarray, sr: int, max_s: float, search_s: float = 2.0) -> int:
-    """Cut index in [max_s - search_s, max_s] at the lowest 100 ms energy (same rule as asr/server.py)."""
+def quiet_cut(x: np.ndarray, sr: int, max_s: float, search_s: float = 4.0) -> int:
+    """Cut index in [max_s - search_s, max_s] at the quietest 300 ms stretch, i.e. a real pause between words
+    (a 100 ms minimum split "eighteen thousand five | hundred"). Same rule in asr/server.py and backend/calls.py."""
     hi = int(max_s * sr)
     if len(x) < hi:
         return len(x)
     lo = max(int((max_s - search_s) * sr), 1)
-    frame = int(0.1 * sr)
+    frame = int(0.05 * sr)
     seg = x[lo:hi]
     n = len(seg) // frame
-    if n < 2:
+    if n < 8:
         return hi
     energy = (seg[: n * frame].reshape(n, frame) ** 2).mean(axis=1)
-    return lo + int(np.argmin(energy)) * frame + frame // 2
+    k = 6                                              # 6 x 50 ms = 300 ms smoothing
+    smooth = np.convolve(energy, np.ones(k) / k, mode="valid")
+    return lo + (int(np.argmin(smooth)) + k // 2) * frame
 
 
 def split_windows(x: np.ndarray, sr: int = SR, max_s: Optional[float] = None) -> list:

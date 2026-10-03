@@ -163,6 +163,8 @@ def _words_to_number(words: list[str]) -> float | None:
 def parse_amount(transcript: str) -> float | None:
     """Largest dollar amount spoken in the transcript ("$12,000", "12,000 dollars", "forty thousand dollars")."""
     best = None
+    # an ASR window boundary can land inside a number ("eight. thousand dollars"): drop punctuation between words
+    transcript = re.sub(r"(?<=[A-Za-z0-9])[.,!?]\s+(?=(?:thousand|hundred|dollars)\b)", " ", transcript, flags=re.I)
     for m in re.finditer(r"\$\s?(\d[\d,]*(?:\.\d+)?)(\s?(?:thousand|k)\b)?", transcript, re.I):
         v = float(m.group(1).replace(",", "")) * (1000 if m.group(2) else 1)
         best = v if best is None or v > best else best
