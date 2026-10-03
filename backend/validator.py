@@ -25,6 +25,9 @@ from typing import Any, Iterable
 NEAR_CHARS = 120
 TOL = 0.01  # 1%
 
+# an amount next to a cited id is that id's amount, unless one of these words introduces it
+AGG_RE = re.compile(r"\b(total(?:l?ing|led)?|sum|overall|combined|aggregate|median|average|largest|smallest|"
+                    r"in all|altogether)\b", re.I)
 TXN_RE = re.compile(r"(?<![A-Za-z0-9_])T\d+(?![A-Za-z0-9_])")
 
 _CUR_WORDS = (r"US\s?Dollars?|USD|US\$|dollars?|Euros?|EUR|Yuan|CNY|Yen|JPY|UK\s?Pounds?|GBP|Rupees?|INR|"
@@ -111,12 +114,16 @@ def validate(ring_id: str, narrative: str, *, txns=None, rings=None) -> dict:
         # the ring's own edge is authoritative for membership; the transactions doc for existence
         return edge_by_id.get(tid) or found.get(tid)
 
-    # ---- attach each amount to the nearest cited id (prefer a nearby id whose value it matches)
+    aggregates = [(n, v) for n, v in _ring_figures(ring) if not n.startswith(("amount of", "USD value of"))]
+
+    # ---- attach each amount to a cited id. Candidates are only the id immediately before and the
+    # id immediately after the amount (within NEAR_CHARS), so swapped amounts cannot both validate.
     attached: dict[str, list[tuple[float, str]]] = {t: [] for t in uniq_ids}
     unattached: list[tuple[float, str]] = []
     for val, raw, s, e in amounts:
-        near = sorted(((_gap((s, e), (ts, te)), tid) for tid, ts, te in ids
-                       if _gap((s, e), (ts, te)) <= NEAR_CHARS), key=lambda x: x[0])
+        before = [(s - te, tid) for tid, ts, te in ids if te <= s and s - te <= NEAR_CHARS]
+        after = [(ts - e, tid) for tid, ts, te in ids if ts >= e and ts - e <= NEAR_CHARS]
+        near = sorted(([min(before)] if before else []) + ([min(after)] if after else []))
         if not near:
             unattached.append((val, raw))
             continue
@@ -126,6 +133,10 @@ def validate(ring_id: str, narrative: str, *, txns=None, rings=None) -> dict:
             if r and (_matches(val, r.get("amount")) or _matches(val, r.get("usd"))):
                 pick = tid
                 break
+        if (pick is None and AGG_RE.search(text[max(0, s - 40):s])
+                and any(_matches(val, ref) for _, ref in aggregates)):
+            unattached.append((val, raw))   # e.g. "... T102 $12,000.00. Total $22,614.21."
+            continue
         attached[pick or near[0][1]].append((val, raw))
 
     citations: list[dict] = []

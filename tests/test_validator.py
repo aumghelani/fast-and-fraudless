@@ -113,7 +113,7 @@ def test_no_citations_not_valid():
 def test_extractors_ignore_dates_counts_accounts():
     text = "On 2022-09-01 13:20, 14 transfers from 800737690 and 802225A40 hit the hub (49.00%)."
     assert extract_amounts(text) == []
-    assert extract_txn_ids("T12, T3x, xT4, (T56)") == [("T12", 0, 3), ("T56", 15, 18)]
+    assert extract_txn_ids("T12, T3x, xT4, (T56)") == [("T12", 0, 3), ("T56", 16, 19)]
 
 
 def test_sar_word_not_money():
@@ -123,3 +123,10 @@ def test_sar_word_not_money():
 def test_k_suffix():
     vals = [v for v, *_ in extract_amounts("about $9.5k")]
     assert vals == [9500.0]
+
+
+def test_swapped_amounts_not_both_valid():
+    res = run("T100 $12,000.00, T102 $9,524.21")
+    assert res["valid_all"] is False
+    res = run("$12,000.00 (T100), $9,524.21 (T102)")
+    assert res["valid_all"] is False
