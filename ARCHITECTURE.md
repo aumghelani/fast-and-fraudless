@@ -146,3 +146,17 @@ Over the trailing window `W` (default 4 sim-days) of processed transactions, exc
 ## 10. What is synthetic (always say it)
 
 IBM AML data is synthetic and labelled. Margaret, David and the 10 calls are fictional and planted. The ring R-102 transactions are verbatim from IBM's labelled data, and only Margaret's wire to its feeder `802225A40` is planted.
+
+## 11. Bank integration (drop-in)
+
+`backend/integrations.py` adds on-prem adapters (details in INTEGRATION.md):
+
+- **In:**
+  - ISO 20022 `pacs.008` / `pain.001` screening. It reuses the same payee check and rules as the call guard, so a payment and a call get the same decision.
+  - Core-banking batch ingest.
+- **Out:**
+  - HMAC-signed webhooks to the bank's own case management (bank-internal URLs only). Bodies carry ids and status only.
+  - FinCEN-style SAR draft (XML/JSON).
+  - CSV case export.
+- **White-label:** `config/branding.json`.
+- **New collections:** `inbound_payments`, `inbound_transactions`, `webhook_deliveries`.
