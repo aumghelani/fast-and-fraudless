@@ -1,9 +1,4 @@
-"""Serialize every `nemoclaw` CLI call made by this process (E-014).
-
-The nemoclaw CLI takes a host-wide lock (~/.nemoclaw-portable-host.lock) and gives up after ~120
-retries (~13 s). Agent investigations hold it for minutes, so parallel callers (alerts) failed.
-Here callers queue in-process instead; `urgent=True` (alerts) goes ahead of the next investigation.
-"""
+"""Run nemoclaw CLI calls one at a time; alerts go ahead of queued investigations (E-014)."""
 from __future__ import annotations
 
 import subprocess
