@@ -494,6 +494,7 @@ def main(argv=None) -> int:
     ap.add_argument("--skip-regression", action="store_true")
     ap.add_argument("--json-out", default=None)
     ap.add_argument("--rescore", default=None, help="score a saved --json-out run again (no new model runs)")
+    ap.add_argument("--sandbox-from", default=None, help="carry the sandbox result of a saved run (no second run)")
     args = ap.parse_args(argv)
     if args.rescore:
         from backend.db import db
@@ -554,7 +555,13 @@ def main(argv=None) -> int:
                 per_case.append({"part": "case-fields", "id": f"fields:{ring['_id']}", "before": before,
                                  "after": after, "decision_fields_changed": before != after,
                                  "ok": before == after})
-    if args.sandbox:
+    if args.sandbox_from:                           # the one sandbox run, carried over (labelled)
+        prev = json.loads(Path(args.sandbox_from).read_text(encoding="utf-8"))
+        for p in prev["per_case"]:
+            if p["part"] == "sandbox":
+                per_case.append({**p, "carried_from": prev["ran_at"]})
+                notes.append(f"sandbox result carried over from the run at {prev['ran_at']} (not run again)")
+    elif args.sandbox:
         if d is None or ring is None:
             notes.append("sandbox run skipped: needs Mongo and a ring")
         else:
