@@ -13,6 +13,31 @@ import { customerName, mmss } from '../call/CallScene'
 import { cueLabel } from '../call/cues'
 import { VerdictCard } from './VerdictCard'
 import { PayeePath } from './PayeePath'
+import { useEffect, useState } from 'react'
+import { DecisionPipeline } from '../../components/pipeline/DecisionPipeline'
+import { usePipelineData } from '../../components/pipeline/usePipelineData'
+
+// each new verdict first plays the rules pipeline (queue → checks → decision), then the verdict layout
+const PIPE_MS = 5200
+
+function PipelineIntro() {
+  const data = usePipelineData()
+  return <DecisionPipeline call={data.call} queue={data.queue} className="h-full" />
+}
+
+function usePipelineIntro(key: string) {
+  const [until, setUntil] = useState(0)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (key) setUntil(Date.now() + PIPE_MS)
+  }, [key])
+  useEffect(() => {
+    if (!until) return
+    const t = setTimeout(() => tick((x) => x + 1), Math.max(0, until - Date.now()) + 30)
+    return () => clearTimeout(t)
+  }, [until])
+  return Date.now() < until
+}
 
 function lastSentence(c: Call): string {
   const t = (c.transcript_final || c.transcript || '').trim()
@@ -41,6 +66,7 @@ export function DecisionScene() {
   const ctl = useCtl()
   const active = ctl.mode === 'replay' || ctl.mode === 'mic'
   const v = verdictOf(call)
+  const intro = usePipelineIntro(call && v ? `${call.call_id}:${v}` : '')
 
   if (!call || !v) {
     return (
@@ -48,6 +74,16 @@ export function DecisionScene() {
         <Empty title="No decision yet · start a call" sub={call ? 'Listening for the first window of speech…' : undefined}>
           <StartTray />
         </Empty>
+      </SceneFrame>
+    )
+  }
+
+  if (intro) {
+    return (
+      <SceneFrame headline={<Strip call={call} active={active} />}>
+        <div className="col-span-12 h-full min-h-0">
+          <PipelineIntro />
+        </div>
       </SceneFrame>
     )
   }
