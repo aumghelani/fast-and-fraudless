@@ -1,9 +1,4 @@
-"""In-process event bus feeding the SSE stream (`GET /api/events`).
-
-Every module publishes with `bus.publish(type, data)`; it is safe to call from worker threads.
-Event types and payloads are defined in README.md (the contract). The bus also keeps the
-latest state per type so `GET /api/state` can hydrate a freshly opened UI.
-"""
+"""In-process event bus behind GET /api/events (SSE) and GET /api/state. Thread-safe publish."""
 from __future__ import annotations
 
 import asyncio
