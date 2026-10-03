@@ -204,6 +204,10 @@ def _sar_since(ring_id: str, since_ms: int) -> dict | None:
 
 def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0) -> None:
     update_case(ring_id, f"woke via {reason} (queued {queued_s:.0f} s)", status="woke", keep_if=_TERMINAL)
+    # from here on the case doc is the dedupe key; dropping it from _queued lets a ring id be re-used
+    # after `ringfinder --reset` (which clears cases and restarts ids at R-001)
+    with _qlock:
+        _queued.discard(ring_id)
     cmd = [settings.nemoclaw_bin, settings.sandbox, "agent", "--agent", "main", "--session-id", f"ring-{ring_id}",
            "--json", "-m", WAKE_PROMPT.format(ring_id=ring_id)]
     t0 = time.time()
@@ -253,6 +257,9 @@ def _worker(n: int) -> None:
         except Exception as e:
             log(f"worker {n} crashed on {ring_id}: {e}")
             update_case(ring_id, f"error: bridge failure ({e})", status="error", keep_if=_TERMINAL)
+        finally:
+            with _qlock:
+                _queued.discard(ring_id)
 
 
 def start() -> None:
