@@ -170,7 +170,7 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
   return (
     <Card bar title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex flex-col px-6 pb-5 pt-5">
       <div className="flex items-baseline gap-2 font-mono">
-        <span className={cx('inline-block w-[2ch] text-right text-[64px] font-semibold leading-none tnum', risk == null ? 'text-faint' : 'text-accent')}>
+        <span className={cx('inline-block w-[2ch] text-right text-[64px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : 'text-accent')}>
           {risk == null ? '—' : <Ticker value={risk} reduced={reduced} />}
         </span>
         <span className="text-[22px] text-mute">/100</span>
