@@ -99,8 +99,14 @@ the laptop). On `http://<box-ip>:8790` from another machine the browser blocks `
 - `src/scenes/registry.ts`: scene id → `{ Stage, Details }`
 - `src/scenes/watching/`: `WatchingScene`, `MapLayer` (3-D bank map), `mapModel`
 - `src/scenes/call/`: `CallScene`, `Transcript`, `cues`; `src/components/VoiceOrb.tsx` (audio-reactive orb)
-- `src/scenes/decision/`: `DecisionScene`, `VerdictCard`, `PayeePath`
+- `src/scenes/decision/`: `DecisionScene` (each new verdict first plays the rules pipeline, then the verdict card),
+  `VerdictCard`, `PayeePath`
+- `src/components/pipeline/`: `DecisionPipeline` (queue, checks, decision), `adapter`, `types`, `usePipelineData`
+- `src/components/magicui/`: animated beam, animated list, number ticker, border beam and blur fade (MIT), used by
+  the pipeline
 - `src/scenes/investigation/`: `InvestigationScene`, `SarDocument`, `CaseSteps`
 - `src/scenes/proof/`: `ProofScene`, `LeakTest`, `egressSummary`
 - `src/scenes/results/`: `ResultsScene`, `Tiles`
 - `src/dev/fixtures.ts`: dev-only demo fixtures
+- `pipeline-demo.html`, `src/pipeline-demo.tsx`: dev page for the decision pipeline (`/pipeline-demo.html`)
+- `src/types/modules.d.ts`: typings for untyped modules
