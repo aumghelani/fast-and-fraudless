@@ -106,14 +106,28 @@ def detect(processed: pd.DataFrame, window: pd.DataFrame, k_in: int, k_out: int,
 
     rings = []
     if len(fin):
-        e = w[w["dst"].isin(fin.index)]
-        for hub, g in e.groupby("dst"):
-            rings.append((hub, "FAN-IN", g))
+        rings += [(hub, "FAN-IN", g) for hub, g in _host_groups(w[w["dst"].isin(fin.index)], "dst")]
     if len(fout):
-        e = w[w["src"].isin(fout.index)]
-        for hub, g in e.groupby("src"):
-            rings.append((hub, "FAN-OUT", g))
+        rings += [(hub, "FAN-OUT", g) for hub, g in _host_groups(w[w["src"].isin(fout.index)], "src")]
     return rings
+
+
+HOST_COLS = ("src", "dst", "amount", "currency", "usd", "ts", "txn_row", "is_laundering")
+
+
+def _host_groups(e: pd.DataFrame, key: str):
+    """Split the (small) flagged-edge frame per hub on the host with numpy.
+
+    Iterating a GPU groupby in Python costs one device round-trip per hub (measured: GPU at 1%,
+    38 s cycles on HI-Medium). Copy the few needed columns to host once, then split there."""
+    arr = {c: e[c].to_numpy() for c in HOST_COLS}
+    if len(arr[key]) == 0:
+        return []
+    order = np.argsort(arr[key], kind="stable")
+    keys = arr[key][order]
+    uniq, first = np.unique(keys, return_index=True)
+    bounds = list(first) + [len(keys)]
+    return [(u, {c: arr[c][order[bounds[i]:bounds[i + 1]]] for c in HOST_COLS}) for i, u in enumerate(uniq)]
 
 
 # ---------------------------------------------------------------- mongo sink
@@ -184,6 +198,7 @@ def run(args):
     cursor = start + window if args.dry_run else start
     flagged_rows: set[int] = set()
     escalated_rows: set[int] = set()
+    flagged_lab, escalated_lab = [0, 0], [0, 0]   # [labelled laundering, total] running counts (no 32M scans)
     rings: dict[str, dict] = {}       # hub+episode -> ring doc
     hub_episode: dict[str, tuple[str, pd.Timestamp]] = {}
     counter = 0
@@ -199,7 +214,6 @@ def run(args):
 
         for hub, kind, g in detect(processed, win, args.k_in, args.k_out, args.hub_max,
                                    tuple(args.formats.split(",")), not args.same_bank_ok):
-            g = to_host(g)
             prev = hub_episode.get(hub)
             if prev and cursor - prev[1] <= window:
                 ring_id = prev[0]
@@ -212,6 +226,9 @@ def run(args):
             is_new = ring_id not in rings
             if not is_new and not new_rows:
                 continue
+            for r_, lab_ in zip(rows, g["is_laundering"].tolist()):
+                if r_ not in flagged_rows:
+                    flagged_lab[0] += int(lab_); flagged_lab[1] += 1
             flagged_rows.update(rows)
             accounts = sorted(set(g["src"].tolist()) | set(g["dst"].tolist()))
             edges = [{"src": s, "dst": d, "amount": round(float(a), 2), "currency": c,
@@ -219,11 +236,14 @@ def run(args):
                      for s, d, a, c, u, t, r in zip(g["src"], g["dst"], g["amount"], g["currency"],
                                                      g["usd"], g["ts"], g["txn_row"])]
             span_h = (pd.Timestamp(g["ts"].max()) - pd.Timestamp(g["ts"].min())).total_seconds() / 3600
-            amt_med = float(g["usd"].median())
+            amt_med = float(np.median(g["usd"]))
             # Escalation score (measured on HI-Small labels: keeps 92% of true rings, precision 4.5% -> 49%):
             # laundering rings spread over hours/days with larger amounts; benign bursts happen within one hour.
             tier = "escalate" if (span_h >= args.min_span_h and amt_med >= args.min_amt_usd) else "watch"
             if tier == "escalate":
+                for r_, lab_ in zip(rows, g["is_laundering"].tolist()):
+                    if r_ not in escalated_rows:
+                        escalated_lab[0] += int(lab_); escalated_lab[1] += 1
                 escalated_rows.update(rows)
             ring = {"_id": ring_id, "type": kind, "hub": hub, "accounts": accounts, "edges": edges,
                     "total_usd": round(float(g["usd"].sum()), 2), "n_txns": len(edges),
@@ -244,7 +264,7 @@ def run(args):
         done = att_last_ts[att_last_ts <= cursor].index
         sub = at[at["attempt"].isin(done)]
         if len(sub):
-            hit = sub["txn_row"].isin(list(flagged_rows))
+            hit = sub["txn_row"].isin(np.fromiter(flagged_rows, dtype="int64", count=len(flagged_rows)))
             share = hit.groupby(sub["attempt"]).mean()
             recovered = int((share >= 0.5).sum())
             by_type = {}
@@ -252,12 +272,11 @@ def run(args):
                 by_type[str(typ)] = [int((grp >= 0.5).sum()), int(len(grp))]
         else:
             recovered, by_type = 0, {}
-        fl = df[df["txn_row"].isin(list(flagged_rows))] if flagged_rows else df.iloc[:0]
-        precision_all = float(fl["is_laundering"].mean()) if len(fl) else None
-        es = df[df["txn_row"].isin(list(escalated_rows))] if escalated_rows else df.iloc[:0]
-        precision = float(es["is_laundering"].mean()) if len(es) else None
+        precision_all = flagged_lab[0] / flagged_lab[1] if flagged_lab[1] else None
+        precision = escalated_lab[0] / escalated_lab[1] if escalated_lab[1] else None
         if len(sub):
-            recovered_esc = int((sub["txn_row"].isin(list(escalated_rows)).groupby(sub["attempt"]).mean() >= 0.5).sum())
+            esc_arr = np.fromiter(escalated_rows, dtype="int64", count=len(escalated_rows))
+            recovered_esc = int((sub["txn_row"].isin(esc_arr).groupby(sub["attempt"]).mean() >= 0.5).sum())
         else:
             recovered_esc = 0
         sink.meta("eval_rings", {"rings_recovered": recovered, "rings_total": int(len(done)),
