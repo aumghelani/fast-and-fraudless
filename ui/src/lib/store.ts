@@ -317,4 +317,5 @@ if (import.meta.env.DEV) {
   const w = window as any
   w.__ffInject = (m: SseMessage) => applyMessage(m)
   w.__ffLocal = (p: Partial<State>) => patchLocal(p)
+  w.__ffState = () => state
 }

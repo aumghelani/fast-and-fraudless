@@ -22,9 +22,12 @@ const mem = {
   lastVerdict: null as Verdict | null,
   calls: undefined as State['calls'] | undefined,
   sars: undefined as State['sars'] | undefined,
+  cases: undefined as State['cases'] | undefined,
   egress: undefined as State['egress'] | undefined,
   knownCalls: null as Set<string> | null,
   knownSars: null as Set<string> | null,
+  caseStatus: null as Map<string, string | undefined> | null,
+  caseDrafted: false, // a case moved to sar_drafted while this page was open
   deniedKey: 0,
 }
 
@@ -107,6 +110,17 @@ function evaluate(s: State, mode: CallMode) {
     mem.sars = s.sars
   }
 
+  // a case moving to sar_drafted means a SAR is on its way (R4 may move before the sar event)
+  if (s.cases !== mem.cases) {
+    const first = !mem.caseStatus
+    const seen = (mem.caseStatus ??= new Map())
+    for (const [id, c] of Object.entries(s.cases)) {
+      if (!first && c?.status === 'sar_drafted' && seen.get(id) !== 'sar_drafted') mem.caseDrafted = true
+      seen.set(id, c?.status)
+    }
+    mem.cases = s.cases
+  }
+
   // a DENIED row from this session lights Proof
   if (s.egress !== mem.egress) {
     const base = Math.max(s.egressBaseKey ?? Number.MAX_SAFE_INTEGER, mem.deniedKey)
@@ -144,8 +158,7 @@ function evaluate(s: State, mode: CallMode) {
   if (story.scene === 'call' && !mem.fired.r3) {
     if (cv === 'HOLD' || cv === 'VERIFY' || (call?.ended && cv)) arm('r3', 'call', 'decision', 0)
   } else if (story.scene === 'decision' && !mem.fired.r4) {
-    const sarReady =
-      Object.keys(s.sars).length > 0 || Object.values(s.cases).some((c) => c?.status === 'sar_drafted')
+    const sarReady = Object.keys(s.sars).length > 0 || mem.caseDrafted
     if (call?.banker_decision && call.ended && sarReady) arm('r4', 'decision', 'investigation', 3000)
   } else if (story.scene === 'investigation' && !mem.fired.r5) {
     if (shown && s.sars[shown]?.decision) arm('r5', 'investigation', 'proof', 2000)
