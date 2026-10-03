@@ -29,7 +29,7 @@ TXN_RE = re.compile(r"(?<![A-Za-z0-9_])T\d+(?![A-Za-z0-9_])")
 
 _CUR_WORDS = (r"US\s?Dollars?|USD|US\$|dollars?|Euros?|EUR|Yuan|CNY|Yen|JPY|UK\s?Pounds?|GBP|Rupees?|INR|"
               r"Rubles?|RUB|Canadian\s?Dollars?|CAD|Australian\s?Dollars?|AUD|Swiss\s?Francs?|CHF|"
-              r"Mexican\s?Pesos?|MXN|Brazil(?:ian)?\s?Reals?|BRL|Shekels?|ILS|Saudi\s?Riyals?|SAR\b|Bitcoins?|BTC")
+              r"Mexican\s?Pesos?|MXN|Brazil(?:ian)?\s?Reals?|BRL|Shekels?|ILS|Saudi\s?Riyals?|Bitcoins?|BTC")
 _NUM = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 # group "a": prefixed by a currency symbol; "b": followed by a currency word; "c": prefixed by a code;
 # "d": bare number that looks like money (comma-grouped or exactly 2 decimals)
@@ -37,7 +37,7 @@ MONEY_RE = re.compile(
     rf"(?:[$€£¥]\s?(?P<a>{_NUM})(?P<ak>\s?[kKmM](?![A-Za-z]))?)"
     rf"|(?:(?<![\w.,/:\-])(?P<b>{_NUM})\s?(?:{_CUR_WORDS})(?![A-Za-z]))"
     rf"|(?:\b(?:USD|EUR|GBP)\s?(?P<c>{_NUM}))"
-    rf"|(?:(?<![\w.,/:\-$€£¥])(?P<d>\d{{1,3}}(?:,\d{{3}})+(?:\.\d{{1,2}})?|\d+\.\d{{2}})(?![\w.,/:\-]|\d))"
+    rf"|(?:(?<![\w.,/:\-$€£¥])(?P<d>\d{{1,3}}(?:,\d{{3}})+(?:\.\d{{1,2}})?|\d+\.\d{{2}})(?![\w.,/:\-%]))"
 )
 
 
