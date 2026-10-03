@@ -13,12 +13,6 @@ export function summariseError(msg?: string): string {
   return msg && /no SAR submitted/i.test(msg) ? 'No report submitted · will retry' : 'Run failed · will retry'
 }
 
-const STATUS_ROW: Record<string, string> = {
-  sar_drafted: 'Waiting for an analyst',
-  approved: 'Approved by analyst',
-  rejected: 'Rejected by analyst',
-}
-
 /** Steps from the last wake-up on (woke, fetched evidence, drafted, validated), at most `max`. */
 export function caseSteps(kase?: Case, max = 4): Step[] {
   const tl = kase?.timeline ?? []
@@ -51,11 +45,10 @@ export function caseSteps(kase?: Case, max = 4): Step[] {
     const m = /(\d+)\/(\d+) citations verified/.exec(msg)
     if (m && !checked) {
       checked = true
-      out.push({ key: `c${i}`, ts: e.ts, text: `Validated ${m[1]}/${m[2]} citations` })
+      out.push({ key: `c${i}`, ts: e.ts, text: 'Validated the citations' })
     }
   }
-  const last = STATUS_ROW[String(kase?.status ?? '')]
-  if (last) out.push({ key: `s-${kase?.status}`, ts: tl[tl.length - 1]?.ts, text: last })
+  // the analyst's part shows as the buttons / decision pill, not as a step
   return out.slice(-max)
 }
 
