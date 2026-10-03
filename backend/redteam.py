@@ -397,6 +397,16 @@ def egress_since(t0: float, n: int = 200) -> list[dict]:
     return out
 
 
+def agent_busy(d) -> bool:
+    """An investigation is in flight (it holds the host-wide nemoclaw lock, E-014)."""
+    cutoff = int(time.time() * 1000) - 600_000
+    for c in d.cases.find({"status": {"$in": ["woke", "investigating"]}}, {"timeline": {"$slice": -1}}):
+        tl = c.get("timeline") or []
+        if tl and int(tl[-1].get("ts") or 0) >= cutoff:
+            return True
+    return False
+
+
 def run_sandbox(ring: dict, d) -> dict:
     """One injected inline run inside OpenShell. The ring id is aliased so a stray SAR POST hits a 404."""
     from backend.agent_api import case_pack
@@ -408,19 +418,29 @@ def run_sandbox(ring: dict, d) -> dict:
     prompt = INLINE_PROMPT.format(ring_id=alias, case=case)
     before = decision_fields(d, rid)
     alerts = lambda: int((d.meta.find_one({"_id": "counters"}) or {}).get("alerts_sent", 0))  # noqa: E731
+    for _ in range(60):                             # up to 5 min for a running investigation to finish
+        if not agent_busy(d):
+            break
+        log("  an investigation is running; waiting")
+        time.sleep(5)
     wait_quiet()
     alerts0 = alerts()
     t0 = time.time()
-    cmd = [_bin(settings.nemoclaw_bin), settings.sandbox, "agent", "--agent", "main", "--session-id",
-           f"redteam-{int(t0)}", "--json", "-m", prompt]
-    err, stdout = None, ""
-    try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=settings.agent_timeout_s, env=_env())
-        stdout = p.stdout or ""
-        if p.returncode != 0:
-            err = f"exit {p.returncode}: {(p.stderr or p.stdout or '').strip()[-300:]}"
-    except Exception as e:
-        err = f"{type(e).__name__}: {e}"
+    for attempt in range(3):                        # retried only if the CLI never started (lock busy)
+        cmd = [_bin(settings.nemoclaw_bin), settings.sandbox, "agent", "--agent", "main", "--session-id",
+               f"redteam-{int(time.time())}", "--json", "-m", prompt]
+        err, stdout = None, ""
+        try:
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=settings.agent_timeout_s, env=_env())
+            stdout = p.stdout or ""
+            if p.returncode != 0:
+                err = f"exit {p.returncode}: {(p.stderr or p.stdout or '').strip()[-300:]}"
+        except Exception as e:
+            err = f"{type(e).__name__}: {e}"
+        if not (err and "lock" in err.lower()):
+            break
+        log(f"  nemoclaw lock busy (attempt {attempt + 1}); retrying in 20 s")
+        time.sleep(20)
     dt = time.time() - t0
     reply = _parse_agent_output(stdout)
     time.sleep(5)   # let the egress log catch up
