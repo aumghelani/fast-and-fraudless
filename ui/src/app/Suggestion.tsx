@@ -36,7 +36,7 @@ export function SuggestionBox() {
   useEffect(() => setAsked({}), [call?.call_id])
   const heardCues = Array.from(new Set((call?.cues ?? []).map((q) => String(q?.cue).toUpperCase()))).filter((k) => k !== 'AMOUNT_STATED')
   return (
-    <section className="card flex h-full w-[460px] shrink-0 flex-col overflow-hidden p-6">
+    <section className="card flex h-full w-[440px] shrink-0 flex-col overflow-hidden px-5 py-4">
       <header className="flex items-center gap-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-ink-2">
         <Lightbulb className="size-4 text-accent" /> Suggestion
       </header>
@@ -47,7 +47,7 @@ export function SuggestionBox() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.3, ease: EASE }}
-          className="mt-4 flex min-h-0 flex-1 flex-col"
+          className="mt-2 flex min-h-0 flex-1 flex-col"
         >
           {!call ? (
             <p className="text-[17px] leading-relaxed text-ink-2">Start a call. Suggestions for the banker appear here while the customer is still talking.</p>
@@ -65,15 +65,14 @@ export function SuggestionBox() {
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <span className={`text-[24px] font-semibold leading-tight ${v === 'HOLD' ? 'text-hold' : v === 'VERIFY' ? 'text-verify' : 'text-clear'}`}>
+                <span className={`text-[21px] font-semibold leading-tight ${v === 'HOLD' ? 'text-hold' : v === 'VERIFY' ? 'text-verify' : 'text-clear'}`}>
                   {HEADLINE[v]}
                 </span>
               </div>
-              {call.reasons?.[0] && <p className="mt-1.5 line-clamp-2 text-[14px] leading-snug text-ink-2">{call.reasons[0]}</p>}
+              {call.reasons?.[0] && <p className="mt-1 line-clamp-1 text-[13.5px] leading-snug text-ink-2" title={call.reasons[0]}>{call.reasons[0]}</p>}
               {qs.length > 0 && (
                 <>
-                  <div className="mt-4 font-mono text-[12px] uppercase tracking-[0.08em] text-mute">Ask the customer</div>
-                  <ol className="mt-1.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+                  <ol aria-label="Ask the customer" className="mt-2.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                     {qs.map((q, i) => (
                       <motion.li
                         key={q}
@@ -85,7 +84,7 @@ export function SuggestionBox() {
                         {/* click to tick a question off once it has been asked */}
                         <button
                           onClick={() => setAsked((m) => ({ ...m, [q]: !m[q] }))}
-                          className={cx('flex w-full gap-3 rounded-lg px-2 py-1 text-left text-[14.5px] leading-snug transition-colors hover:bg-surface-2',
+                          className={cx('flex w-full gap-2.5 rounded-lg px-1.5 py-1 text-left text-[14px] leading-[1.35] transition-colors hover:bg-surface-2',
                             asked[q] ? 'text-mute line-through decoration-faint' : 'text-ink')}
                         >
                           <span className={cx('mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border font-mono text-[11px]',
@@ -99,7 +98,7 @@ export function SuggestionBox() {
                   </ol>
                 </>
               )}
-              <div className="mt-auto flex shrink-0 items-center gap-3 pt-4">
+              <div className="mt-auto flex shrink-0 items-center gap-3 pt-2">
                 {done ? (
                   <Pill tone={done === 'hold' ? 'hold' : 'clear'}>{done === 'hold' ? 'Held by the banker' : 'Released by the banker'}</Pill>
                 ) : (

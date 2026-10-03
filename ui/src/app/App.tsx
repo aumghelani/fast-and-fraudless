@@ -69,8 +69,7 @@ function BehindSummary() {
   )
 }
 
-const WHY_OPEN = 480 // rules and decision panels + the label row
-const BEHIND_OPEN = 340 // 300 px of cards + the label row
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 type Open = 'why' | 'behind' | null
 
 /** One detail section open at a time; whatever space is left goes to the live call. */
@@ -98,30 +97,33 @@ function useAccordion(): [Open, (k: Exclude<Open, null>) => void] {
 
 function Desk() {
   const [open, toggle] = useAccordion()
+  const vh = useViewportH()
+  const whyOpen = Math.round(clamp(vh * 0.42, 300, 470)) // rules and decision panels + label row
+  const behindOpen = Math.round(clamp(vh * 0.34, 250, 340)) // metric cards + label row
   const rise = (i: number) => ({
     initial: { opacity: 0, y: 12 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.45, ease: EASE, delay: 0.06 * i },
   })
   return (
-    <div className="dot-grid grid h-full grid-rows-[64px_minmax(0,1fr)_auto] gap-6 px-8 pb-8">
+    <div className="dot-grid grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)_auto] gap-4 overflow-x-hidden px-6 pb-5">
       <motion.div {...rise(0)} className="min-h-0">
         <Header />
       </motion.div>
-      <motion.div {...rise(1)} className="flex min-h-[300px] gap-6">
+      <motion.div {...rise(1)} className="flex min-h-[280px] min-w-0 gap-4">
         <div className="min-w-0 flex-1">
           <CallPanel />
         </div>
         <SuggestionBox />
       </motion.div>
-      <motion.div {...rise(2)} className="flex flex-col gap-6">
+      <motion.div {...rise(2)} className="flex min-w-0 flex-col gap-4">
         <Section title="Why this decision" summary={<WhySummary />} open={open === 'why'} onToggle={() => toggle('why')}
-          height={open === 'why' ? WHY_OPEN : BAR_H}>
+          height={open === 'why' ? whyOpen : BAR_H}>
           <Pipeline />
         </Section>
         <Section title="Behind the scenes" summary={<BehindSummary />} open={open === 'behind'} onToggle={() => toggle('behind')}
-          height={open === 'behind' ? BEHIND_OPEN : BAR_H}>
-          <div className="grid h-full min-h-0 grid-cols-4 gap-6">
+          height={open === 'behind' ? behindOpen : BAR_H}>
+          <div className="grid h-full min-h-0 grid-cols-4 gap-4">
             <Expandable id="ring">
               <RingCard />
             </Expandable>
@@ -141,22 +143,20 @@ function Desk() {
   )
 }
 
-/** The page is laid out for 1920x1080; smaller screens (e.g. Windows at 125%) scale it down instead of squeezing. */
-function useFitZoom() {
+/** Height of the window, for sections that scale with the screen instead of zooming the page. */
+function useViewportH(): number {
+  const [h, setH] = useState(() => window.innerHeight)
   useEffect(() => {
-    const fit = () => {
-      const z = Math.min(1, window.innerWidth / 1920, window.innerHeight / 1080)
-      document.documentElement.style.zoom = z < 0.995 ? String(z) : ''
-    }
-    fit()
-    window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
+    document.documentElement.style.zoom = '' // an older build zoomed the page; never again
+    const f = () => setH(window.innerHeight)
+    window.addEventListener('resize', f)
+    return () => window.removeEventListener('resize', f)
   }, [])
+  return h
 }
 
 function Shell() {
   const ctl = useCtl()
-  useFitZoom()
   const [entered, setEntered] = useState(false)
   const enter = () => setEntered(true)
   const home = () => setEntered(false)

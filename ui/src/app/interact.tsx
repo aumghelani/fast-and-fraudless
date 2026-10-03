@@ -81,7 +81,7 @@ export function Section({ title, summary, open, onToggle, height, children }: {
         {open && (
           <motion.div
             key="body"
-            className="mt-2 min-h-0 flex-1"
+            className="mt-1 min-h-0 flex-1"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, transition: { duration: 0.15 } }}

@@ -39,6 +39,12 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
   const flagged = checks.filter((c) => c.tone === 'flag').length
   const visible = checks.slice(0, shown)
   const cur = shown - 1
+  // keep the newest heard check in view when the list is taller than the panel
+  const listRef = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    const el = listRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: reduced ? 'auto' : 'smooth' })
+  }, [shown, reduced])
   return (
     <Card bar title="Rules & Checks" right={!call ? '—' : checks.length ? `${flagged} of ${checks.length} flagged` : 'listening…'} className="h-full"
       bodyClassName="relative px-4 py-4">
@@ -57,14 +63,14 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
         </div>
       ) : (
         <div className="flex h-full flex-col">
-        <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
+        <ul ref={listRef} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto [scrollbar-width:none]">
           {visible.map((c, i) => (
             <motion.li
               key={c.id}
               initial={reduced ? false : { opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: EASE }}
-              className="relative flex h-[34px] shrink-0 items-center gap-3 rounded-lg px-3"
+              className="relative flex h-[32px] shrink-0 items-center gap-3 rounded-lg px-3"
             >
               {i === cur && <Bracket reduced={reduced} tone={c.tone} />}
               <span className={cx('relative size-2 shrink-0 rounded-full', DOT[c.tone])} />
@@ -147,9 +153,9 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
 
   const pos = risk ?? 0
   return (
-    <Card bar title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex flex-col px-6 pb-5 pt-5">
+    <Card bar title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex flex-col px-6 pb-3 pt-4">
       <div className="flex items-baseline gap-2 font-mono">
-        <span className={cx('inline-block w-[2ch] text-right text-[64px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : 'text-accent')}>
+        <span className={cx('inline-block w-[2ch] text-right text-[56px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : 'text-accent')}>
           {risk == null ? '—' : <Ticker value={risk} reduced={reduced} />}
         </span>
         <span className="text-[22px] text-mute">/100</span>
@@ -184,9 +190,6 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
         <span className="absolute right-0">100</span>
       </div>
 
-      <p className="mt-4 line-clamp-2 min-h-[44px] text-[14.5px] leading-[22px] text-ink-2">
-        {call?.reasons?.[0] ?? (call ? 'Listening to the call…' : '—')}
-      </p>
 
       {/* the banker acts from the suggestion box; this only reports what they chose */}
       <div className="mt-auto flex h-8 shrink-0 items-center gap-2 font-mono text-[13px] text-mute">

@@ -38,8 +38,9 @@ function sourceOf(c: Call | undefined, mode: string): string {
 function Caption({ call, view, still }: { call?: Call; view: View; still: boolean }) {
   if (view === 'idle')
     return (
-      <p className="mx-auto max-w-[560px] text-[16px] leading-[26px] text-ink-2">
-        Play a recorded call or pick up the microphone. The wire is checked while the customer is still talking.
+      <p className="mx-auto text-[20px] leading-[32px] text-ink-2">
+        Line open. Start a live call <span className="font-mono text-[14px] text-mute">(M)</span> or play a recorded one{' '}
+        <span className="font-mono text-[14px] text-mute">(⇧1)</span>.
       </p>
     )
   if (view === 'starting') return <p className="text-[15px] text-mute">Connecting the call…</p>
@@ -51,8 +52,8 @@ function Caption({ call, view, still }: { call?: Call; view: View; still: boolea
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.2 } }
     : { initial: { opacity: 0, filter: 'blur(3px)' }, animate: { opacity: 1, filter: 'blur(0px)' }, transition: { duration: 0.4, ease: 'easeOut' as const } }
   return (
-    <div className="flex h-[64px] flex-col justify-end overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_16px)]">
-      <p className="text-[19px] leading-[32px]">
+    <div className="flex max-h-[72px] flex-col justify-end overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_14px)]">
+      <p className="text-[24px] leading-[36px]">
         {done.map((s, k) => (
           <motion.span key={`${id}-${first + k}`} {...fade} className={cx('transition-colors duration-300', view === 'ended' ? 'text-ink-2' : 'text-ink')}>
             {s}{' '}
@@ -103,9 +104,9 @@ export function CallPanel() {
   const showCall = view === 'live' || view === 'ended'
 
   return (
-    <section className="card relative flex h-full min-h-0 flex-col overflow-hidden">
+    <section className="relative flex h-full min-h-0 flex-col">
       {/* who is on the line, and the controls */}
-      <div className="flex shrink-0 items-start gap-6 px-6 pt-5">
+      <div className="flex shrink-0 items-start gap-6 px-2 pt-1">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex h-7 items-center gap-2">
             {view === 'live' && (
@@ -199,7 +200,7 @@ export function CallPanel() {
           <Caption call={call} view={view} still={still} />
         </div>
       </VoiceRing3D>
-      <span className="pointer-events-none absolute bottom-4 right-6 font-mono text-[11px] uppercase tracking-[0.06em] text-mute">
+      <span className="pointer-events-none absolute bottom-1 right-2 font-mono text-[11px] uppercase tracking-[0.06em] text-mute">
         Parakeet · local speech{showCall && lat != null ? ` · ${num(lat, 2)} s` : ''}
       </span>
     </section>

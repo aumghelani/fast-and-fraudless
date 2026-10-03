@@ -86,12 +86,12 @@ export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = fal
       camera.lookAt(0, MAX_H * 0.42, 0)
     }
     const resize = () => {
-      const r = el.getBoundingClientRect()
-      const w = Math.max(1, r.width)
-      const h = Math.max(1, r.height)
+      // layout pixels (not getBoundingClientRect): a zoomed page must not shrink the canvas twice
+      const w = Math.max(1, el.clientWidth)
+      const h = Math.max(1, el.clientHeight)
       renderer.setSize(w, h, false)
-      renderer.domElement.style.width = `${w}px`
-      renderer.domElement.style.height = `${h}px`
+      renderer.domElement.style.width = '100%'
+      renderer.domElement.style.height = '100%'
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       // fill ~86% of the visible width at the arc's depth

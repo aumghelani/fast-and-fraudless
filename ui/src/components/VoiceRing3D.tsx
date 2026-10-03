@@ -16,9 +16,9 @@ const TONE_VAR: Record<RingTone, string> = {
 }
 
 const R = 3 // ring radius (world units)
-const MAX_H = 0.95 // tallest bar
+const MAX_H = 0.7 // tallest bar
 const FOV = 30
-const TILT = 1.08 // radians: the ring lies back into a wide ellipse, so the words fit inside it
+const TILT = 1.28 // radians: the ring lies back into a wide ellipse, so the words fit inside it
 
 function cssColor(name: string, fallback: string) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -92,28 +92,54 @@ export function VoiceRing3D({ active, tone = 'listening', bars = 120, className,
     const freq = new Uint8Array(analyser ? analyser.frequencyBinCount : 512)
 
     const resize = () => {
-      const r = el.getBoundingClientRect()
-      const w = Math.max(1, r.width)
-      const h = Math.max(1, r.height)
+      // layout pixels (not getBoundingClientRect): a zoomed page must not shrink the canvas twice
+      const w = Math.max(1, el.clientWidth)
+      const h = Math.max(1, el.clientHeight)
       renderer.setSize(w, h, false)
-      renderer.domElement.style.width = `${w}px`
-      renderer.domElement.style.height = `${h}px`
+      renderer.domElement.style.width = '100%'
+      renderer.domElement.style.height = '100%'
       camera.aspect = w / h
-      // fit the whole ellipse (and its tallest bars) whatever the box shape
-      const tan = Math.tan(((FOV / 2) * Math.PI) / 180)
-      const needV = 2 * (R + MAX_H) * Math.cos(TILT) + 2.2
-      const needH = 2 * (R + MAX_H) * 1.08
-      const dist = Math.max(needV / (2 * tan), needH / (2 * tan * camera.aspect))
-      camera.position.set(0, 0, dist)
-      camera.lookAt(0, 0, 0)
-      camera.updateProjectionMatrix()
-      // tell the overlay how big the inside of the ring is on screen
+      // fit by measuring the ring's real edges on screen (the near side looks bigger in perspective),
+      // then centre it, so nothing is clipped whatever the box shape
+      const E = R + MAX_H * 0.6 // speech rarely reaches the tallest bar; keep a little room, not a lot
+      const edge = [
+        new THREE.Vector3(0, -E, 0), new THREE.Vector3(0, E, 0),
+        new THREE.Vector3(-E, 0, 0), new THREE.Vector3(E, 0, 0),
+      ]
+      const v = new THREE.Vector3()
+      let dist = 6
+      let cy = 0
+      for (let k = 0; k < 40; k++) {
+        camera.position.set(0, cy, dist)
+        camera.lookAt(0, cy, 0)
+        camera.updateProjectionMatrix()
+        camera.updateMatrixWorld(true)
+        tilt.updateMatrixWorld(true)
+        let top = -1, bot = 1, side = 0
+        for (const e of edge) {
+          v.copy(e).applyMatrix4(tilt.matrixWorld).project(camera)
+          top = Math.max(top, v.y)
+          bot = Math.min(bot, v.y)
+          side = Math.max(side, Math.abs(v.x))
+        }
+        const mid = (top + bot) / 2
+        if (top - bot <= 1.78 && side <= 0.9 && Math.abs(mid) < 0.02) break
+        if (top - bot > 1.78 || side > 0.9) dist *= 1.06
+        else if (top - bot < 1.6 && side < 0.82) dist /= 1.04
+        // shift the camera so the ring's on-screen middle sits at the box's middle
+        const tan = Math.tan(((FOV / 2) * Math.PI) / 180)
+        cy += mid * dist * tan * 0.9
+      }
+      // tell the overlay where the ring's middle is and how big its inside is on screen
       tilt.updateMatrixWorld(true)
-      const px = (v: THREE.Vector3) => v.applyMatrix4(tilt.matrixWorld).project(camera)
-      const ix = px(new THREE.Vector3(R * 0.9, 0, 0)).x * w
-      const iy = px(new THREE.Vector3(0, R * 0.9, 0)).y * h
-      el.style.setProperty('--ring-in-w', `${Math.max(120, Math.round(ix))}px`)
-      el.style.setProperty('--ring-in-h', `${Math.max(48, Math.round(Math.abs(iy)))}px`)
+      const px = (x: number, y: number) => new THREE.Vector3(x, y, 0).applyMatrix4(tilt.matrixWorld).project(camera)
+      // middle of the oval as seen (in perspective the true centre sits higher than this)
+      const midY = (px(0, R).y + px(0, -R).y) / 2
+      const inW = (px(R * 0.84, 0).x - px(-R * 0.84, 0).x) * (w / 2)
+      const inH = (px(0, R * 0.72).y - px(0, -R * 0.72).y) * (h / 2)
+      el.style.setProperty('--ring-in-w', `${Math.max(120, Math.round(inW))}px`)
+      el.style.setProperty('--ring-in-h', `${Math.max(48, Math.round(Math.abs(inH)))}px`)
+      el.style.setProperty('--ring-dy', `${Math.round((-midY * h) / 2)}px`)
     }
     resize()
     const ro = new ResizeObserver(resize)
@@ -171,7 +197,7 @@ export function VoiceRing3D({ active, tone = 'listening', bars = 120, className,
 
   return (
     <div ref={host} className={className ?? 'relative h-80 w-full'}>
-      <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">{children}</div>
+      <div className="pointer-events-none absolute inset-0 z-10 grid translate-y-[var(--ring-dy,0px)] place-items-center">{children}</div>
     </div>
   )
 }

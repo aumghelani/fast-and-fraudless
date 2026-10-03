@@ -136,7 +136,7 @@ export function Pipeline() {
   }, [measure])
 
   return (
-    <div ref={box} className="relative grid h-full min-h-0 grid-cols-[28fr_38fr_34fr] gap-x-16">
+    <div ref={box} className="relative grid h-full min-h-0 grid-cols-[minmax(0,26fr)_minmax(0,40fr)_minmax(0,34fr)] gap-x-12">
       <div className="flex min-h-0 flex-col">
         <div className="mb-3 flex h-[18px] items-center justify-between font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-ink-2">
           <span>Wire queue</span>

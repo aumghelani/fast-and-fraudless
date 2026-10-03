@@ -304,13 +304,15 @@ export function patchLocal(p: Partial<State>) {
   set(p)
 }
 
-/** The call on screen: the one this UI started, else the most recently started call. */
+/** The call on screen: the one this UI started or picked, else a call that is live right now.
+ *  Old, finished calls are never shown on their own: idle means empty. */
 export function useActiveCall() {
   const calls = useStore((s) => s.calls)
   const id = useStore((s) => s.activeCallId)
   if (id && calls[id]) return calls[id]
   let best: (typeof calls)[string] | undefined
   for (const c of Object.values(calls)) {
+    if (c.ended) continue
     if (!best || String(c.started_at || '') > String(best.started_at || '')) best = c
   }
   return best
