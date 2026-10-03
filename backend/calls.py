@@ -362,7 +362,7 @@ def _analyze(c: Call) -> None:
             transcript = c.transcript()
         use_llm = os.environ.get("TW_CUES", "llm").lower() != "keywords" and time.time() >= _llm["down_until"]
         cues, source = perceive(transcript, use_llm=use_llm)
-        if use_llm and source != "llm":
+        if use_llm and source == "keywords-fallback":   # only a real LLM failure triggers the backoff
             _llm["down_until"] = time.time() + LLM_BACKOFF_S
         with c.lock:
             amount = c.amount if c.amount_fixed else parse_amount(transcript)
