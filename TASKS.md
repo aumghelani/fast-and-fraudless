@@ -27,12 +27,12 @@
 - [ ] banker decision + alert
 
 ## 3. Proof + numbers (target 15:30)
-- [ ] egress tail + exfil demo DENIED line
-- [ ] counters + net online/offline
-- [ ] telemetry SSE
-- [ ] CPU vs GPU bench numbers
+- [x] egress tail (98 events, DENIED lines incl. sandbox->backend before preset) + exfil endpoint
+- [x] counters (data out 0, denied 14) + net online/offline
+- [x] telemetry SSE (GPU util/temp/power + unified memory)
+- [x] CPU vs GPU bench: 31.9M rows load+detect CPU 37.9 s vs GPU 16.5 s (GPU also serving LLM); idle GPU load 6.3 s
 - [x] eval: rings recovered x/total, precision; calls x/5 scams, false holds y/5
-- [ ] kill-and-resume (STATE RESTORED)
+- [x] backend restart restores state from Mongo (health.restored=true); UI banner pending
 
 ## 4. UI (instructions from Aum)
 - [ ] Control Room per instructions
