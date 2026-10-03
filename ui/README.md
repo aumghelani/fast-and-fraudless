@@ -1,8 +1,9 @@
-# Fast and Fraudless · Control Room UI
+# Fast and Fraudless · UI
 
-One page, dark, built for 1920×1080 (also fine at 1440×900). React 19 + Vite 7 + TypeScript + Tailwind 4,
-3d-force-graph / three.js (3-D bank map with bloom), cytoscape + fcose (payee check), ECharts (sparkline, gauges),
-motion (springs), lucide-react. Fonts are bundled (no CDN at runtime).
+The story of one wire in six scenes, one focal point at a time: **Watching → Call → Decision → Investigation →
+Proof → Results**. Built for 1920×1080 (also fine at 1440×900). React 19 + Vite 7 + TypeScript + Tailwind 4,
+3d-force-graph / three.js (the bank map), motion, lucide-react. Fonts are bundled (no CDN at runtime).
+The design spec is [FLOW_DESIGN.md](FLOW_DESIGN.md).
 
 ## Run (dev, against the live box)
 
@@ -26,26 +27,71 @@ The backend mounts `ui/dist` at `/` (`TW_UI_DIST`), so every API path in the UI 
 
 ## Data flow
 
-`GET /api/state` hydrates the store, then `EventSource('/api/events')` applies `{type, ts, data}` messages
-(auto-reconnect, re-hydrate after a reconnect). Anything not received yet renders as "—"; no numbers are hard-coded.
+`GET /api/state` hydrates the store, then `EventSource('/api/events')` applies `{type, ts, data}` messages.
+Messages that arrive while a snapshot is loading are buffered and replayed on top of it; after a reconnect the
+store hydrates again. Store notifications are coalesced to one per animation frame. Anything not received yet
+renders as "—"; no numbers are hard-coded. Branding comes from `GET /api/integrations/branding` (optional).
+
+## How the stage moves
+
+The director (`src/flow/useDirector.ts`) moves the stage on real events, never sooner than 6 s after a scene was
+entered:
+
+- A call started from this screen (keys, buttons or the mic) starts a new story and goes to **Call** at once.
+- A call started anywhere else only lights a dot on the Call step.
+- **Call → Decision** when the verdict becomes HOLD or VERIFY, or the call ends with any verdict.
+- **Decision → Investigation** 3 s after the banker decides, once the call has ended and a SAR exists.
+- **Investigation → Proof** 2 s after the shown SAR is approved or rejected.
+- Results is manual. Any manual move switches auto-advance off (**A** turns it back on).
+
+Events for a scene you are not on light a small dot on the rail instead of moving the stage.
 
 ## Keys (for the recording)
 
 | Key | Action |
 |---|---|
-| `1` | replay CALL-01 (Margaret): `POST /api/calls/start {scenario}` → `POST /api/calls/{id}/replay {clip}` + plays `/api/audio/CALL-01` |
-| `2` | replay CALL-02 (David) |
-| `M` | start / stop a mic call (16 kHz mono float32, ~2 s POSTs to `/api/calls/{id}/audio`) |
-| `E` | `POST /api/demo/exfil` (DENIED line appears in the egress log) |
+| ← / → | previous / next scene (no wrap) |
+| 1-6, Home, End | jump to a scene |
+| Shift+1 | replay CALL-01 (Margaret): `POST /api/calls/start {scenario}` → `POST /api/calls/{id}/replay` + plays `/api/audio/CALL-01` |
+| Shift+2 | replay CALL-02 (David) |
+| M | mic call on or off (Watching and Call only; 16 kHz mono float32 POSTs to `/api/calls/{id}/audio`) |
+| E | go to Proof and run the leak test (`POST /api/demo/exfil`; the DENIED line appears) |
+| A | auto-advance on or off |
+| D / Esc | details drawer for the scene / close the drawer or sheet |
+| ? | shortcut sheet |
+
+Bare digits never start a replay. Hold, Release, Approve and Reject are mouse only. Every replay is a real call on
+the box, so test scenes with the dev hooks below.
 
 The microphone needs a secure context: open the UI on `localhost` (the box's own browser, or the dev server on
 the laptop). On `http://<box-ip>:8790` from another machine the browser blocks `getUserMedia`; replay still works.
 
+## Dev hooks (dev server only)
+
+- `__ffDemo('margaret' | 'david' | 'sar' | 'denied' | 'offline' | 'online' | 'restored' | 'healed')` plays a timed
+  fixture through the store. The call fixtures count as "started on this screen", so the director runs the story.
+- `__ffInject(msg)` applies one SSE message, `__ffLocal(patch)` patches local state, `__ffGo(sceneId)` moves the
+  stage and `__ffState()` returns the store.
+
 ## Files
 
-- `src/lib/store.ts`: hydrate + SSE store, selector hook, active call
-- `src/lib/audio.ts`, `src/lib/mic.ts`: shared AudioContext/AnalyserNode, mic capture (AudioWorklet, ScriptProcessor fallback), resampling
-- `src/components/BankMap.tsx`: 3-D ring map (newest 140 escalated rings, camera fly-to, particles = money flow)
-- `src/components/VoiceOrb.tsx`: audio-reactive orb (mic and replay audio), tint follows the recommendation
-- `src/components/LiveCall.tsx`, `Recommendation.tsx`, `PayeeGraph.tsx`: call guard
-- `src/components/AgentPanel.tsx`, `EgressLog.tsx`, `Gauges.tsx`, `EvalStrip.tsx`, `TopBar.tsx`, `Banners.tsx`
+- `src/App.tsx`, `src/main.tsx`: call controls provider, keys, director, shell layout; `MotionConfig` reduced motion
+- `src/lib/store.ts`: hydrate + SSE store (per-frame notifications, buffered hydrate), story and leak-test state
+- `src/lib/types.ts`, `src/lib/api.ts`, `src/lib/format.ts`: backend shapes, REST calls, number and time formats
+- `src/lib/branding.ts`: optional white-label name and accent
+- `src/lib/useCallControls.ts`, `src/lib/audio.ts`, `src/lib/mic.ts`: replay and mic calls, shared AnalyserNode
+- `src/flow/scenes.ts`, `story.ts`, `derive.ts`: scene list, story state and actions, derived data (story call,
+  shown SAR, ring by id, plain-word errors)
+- `src/flow/useDirector.ts`, `useKeys.ts`, `CtlProvider.tsx`: auto-advance rules, keyboard, call controls context
+- `src/shell/`: `Header`, `StepRail`, `Stage`, `SceneFrame`, `StartTray`, `DetailsDrawer`, `SystemOverlays`
+  (offline frame, toasts), `ShortcutSheet`
+- `src/ui/primitives.tsx`, `src/ui/tokens.ts`: Button, Chip, Kbd, Eyebrow, Stat, CountUp, Reveal, Empty; verdict
+  copy and colours, easing, reduced motion
+- `src/scenes/registry.ts`: scene id → `{ Stage, Details }`
+- `src/scenes/watching/`: `WatchingScene`, `MapLayer` (3-D bank map), `mapModel`
+- `src/scenes/call/`: `CallScene`, `Transcript`, `cues`; `src/components/VoiceOrb.tsx` (audio-reactive orb)
+- `src/scenes/decision/`: `DecisionScene`, `VerdictCard`, `PayeePath`
+- `src/scenes/investigation/`: `InvestigationScene`, `SarDocument`, `CaseSteps`
+- `src/scenes/proof/`: `ProofScene`, `LeakTest`, `egressSummary`
+- `src/scenes/results/`: `ResultsScene`, `Tiles`
+- `src/dev/fixtures.ts`: dev-only demo fixtures

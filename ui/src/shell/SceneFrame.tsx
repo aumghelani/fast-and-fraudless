@@ -21,8 +21,8 @@ export function SceneFrame({ headline, subline, actions, children }: {
         )}
         {subline != null && <p className="mt-2 text-body text-ink-2">{subline}</p>}
       </header>
-      <div className="grid-12 min-h-0 flex-1">{children}</div>
-      <footer className="mt-6 flex h-10 shrink-0 items-center gap-6 text-meta text-mute">
+      <div className="grid-12 min-h-0 flex-1 [&>*]:pointer-events-auto">{children}</div>
+      <footer className="mt-6 flex h-10 shrink-0 items-center gap-6 text-meta text-mute [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
         <button
           className="rounded-lg px-1 transition-colors duration-200 hover:text-ink-2"
           onClick={() => setAuto(!auto)}

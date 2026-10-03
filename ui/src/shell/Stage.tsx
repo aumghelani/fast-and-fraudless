@@ -5,6 +5,7 @@ import { useScene } from '../flow/story'
 import { registry } from '../scenes/registry'
 import { MapLayer } from '../scenes/watching/MapLayer'
 import { DUR, EASE, usePrefersReducedMotion } from '../ui/tokens'
+import { cx } from '../lib/format'
 
 export function Stage() {
   const scene = useScene()
@@ -30,7 +31,8 @@ export function Stage() {
         <AnimatePresence initial={false}>
           <motion.div
             key={scene}
-            className="absolute inset-0"
+            // in Watching, empty parts of the stage let the pointer through to the map
+            className={cx('absolute inset-0', scene === 'watching' && 'pointer-events-none')}
             initial={reduced ? { opacity: 0 } : { opacity: 0, x: `${dir * 2}rem` }}
             animate={enter}
             exit={exit}
