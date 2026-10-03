@@ -1,9 +1,4 @@
-"""Forward what the GPU ring finder writes to Mongo (rings, meta: tick/eval/bench) onto the SSE bus.
-
-Uses a change stream so the UI updates the moment the worker writes (no polling of 32M rows; the
-worker owns the transactions in GPU memory). The agent bridge has its own change stream with a
-persisted resume token; this one is display-only, so it starts from "now".
-"""
+"""Forward ring-finder output (rings, tick, eval, bench) from Mongo to the SSE bus."""
 from __future__ import annotations
 
 import threading
