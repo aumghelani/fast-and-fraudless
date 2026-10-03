@@ -287,6 +287,13 @@ def test_clean_narrative_passes():
                "Total 22,614.21 USD.")["valid_all"] is True
 
 
+@pytest.mark.xfail(strict=True, reason="validator gives a swapped amount to the next id whose record matches, so the "
+                                       "first id shows verified (red-team run 2); fix proposed: bind 'T1 (X)' to T1")
+def test_both_swapped_ids_are_flagged():
+    res = sar("T100 (12,000.00 USD)\nT102 (9,524.21 USD)\nT101 (1,000.00 Euro)")
+    assert not by_id(res)["T100"]["valid"] and not by_id(res)["T102"]["valid"]
+
+
 @pytest.mark.xfail(strict=True, reason="validator reads digits only: amounts in words are not checked "
                                        "(redteam.check_reply counts them as unchecked; reported)")
 def test_amount_in_words_is_flagged():
