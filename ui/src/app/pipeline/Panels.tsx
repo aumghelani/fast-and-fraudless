@@ -70,7 +70,7 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
         </div>
       ) : (
         <div className="flex h-full flex-col">
-        <ul ref={listRef} className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pt-2 [mask-image:linear-gradient(to_bottom,transparent,#000_14px)] [scrollbar-width:none]">
+        <ul ref={listRef} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pt-2 [mask-image:linear-gradient(to_bottom,transparent,#000_14px)] [scrollbar-width:none]">
           {visible.map((c) => (
             <motion.li
               key={c.id}
@@ -78,7 +78,7 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
               animate={{ opacity: 1, y: 0, scaleY: 1 }}
               style={{ transformOrigin: 'bottom' }}
               transition={{ duration: RISE_S, ease: EASE }}
-              className="relative flex h-[40px] shrink-0 items-center gap-3 overflow-hidden rounded-lg border border-line px-3"
+              className="relative flex h-[36px] shrink-0 items-center gap-3 overflow-hidden rounded-lg border border-line px-3"
             >
               {/* the tint that the scan bar leaves behind */}
               <motion.span
@@ -175,16 +175,16 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
   const bar = tone === 'hold' ? 'bg-hold-fill' : tone === 'verify' ? 'bg-verify' : tone === 'clear' ? 'bg-clear' : 'bg-accent'
   return (
     <GlowCard tone={tone} pulsing={!!call && !call.ended} className="h-full">
-    <Card bar barClass={bar} title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex flex-col px-6 pb-3 pt-4">
+    <Card bar barClass={bar} title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex min-h-0 flex-col px-6 pb-4 pt-3">
       <div className="flex items-baseline gap-2 font-mono">
-        <span className={cx('inline-block w-[2ch] text-right text-[56px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : ink, 'transition-colors duration-500')}>
+        <span className={cx('inline-block w-[2ch] text-right text-[48px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : ink, 'transition-colors duration-500')}>
           {risk == null ? '—' : <Ticker value={risk} reduced={reduced} />}
         </span>
         <span className="text-[24px] text-mute">/100</span>
       </div>
-      <p className="mt-2 font-mono text-[13px] text-mute">risk index from rule hits</p>
+      <p className="mt-1.5 font-mono text-[13px] text-mute">risk index from rule hits</p>
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-3 flex gap-2">
         {CHIPS.map(({ v, on }) => (
           <span key={v} className={cx('rounded-full px-4 py-1 font-mono text-[14px] font-medium transition-colors duration-300',
             verdict === v ? on : 'bg-surface-2 text-mute')}>
@@ -201,7 +201,7 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
         )}
       </div>
 
-      <div className="relative mt-5 h-5">
+      <div className="relative mt-4 h-5 shrink-0">
         <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-accent-soft" />
         <motion.div className={cx('absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full transition-colors duration-500', fill)}
           initial={false} animate={{ width: `${pos}%` }}

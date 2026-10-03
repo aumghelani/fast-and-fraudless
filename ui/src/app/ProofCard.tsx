@@ -30,11 +30,11 @@ export function ProofCard() {
   const lastRec = watchdog?.last_recovery?.ts
 
   return (
-    <Card title="Nothing leaves the box" right="OpenShell" className="h-full" bodyClassName="flex flex-col px-5 pb-4 pt-3">
-      <div className="flex items-center gap-5">
+    <Card title="Nothing leaves the box" right="OpenShell" className="h-full" bodyClassName="flex min-h-0 flex-col px-5 pb-3 pt-2">
+      <div className="flex shrink-0 items-center gap-5">
         <span
           className={cx(
-            'tnum font-mono text-[64px] font-semibold leading-none tracking-tight',
+            'tnum font-mono text-[52px] font-semibold leading-none tracking-tight',
             out == null ? 'text-faint' : out === 0 ? 'text-clear' : 'text-hold',
           )}
         >
@@ -46,12 +46,12 @@ export function ProofCard() {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-line pt-3">
+      <div className="mt-3 grid shrink-0 grid-cols-2 gap-4 border-t border-line pt-2.5">
         <Stat value={num(deniedTotal)} label="denied attempts" />
         <Stat value={num(rec)} aside={lastRec ? `last ${hhmm(lastRec)}` : undefined} label={`automatic ${rec === 1 ? 'recovery' : 'recoveries'}`} />
       </div>
 
-      <div className="mt-auto flex flex-col gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
+      <div className="mt-auto flex shrink-0 flex-col gap-2 rounded-xl bg-surface-2 px-3 py-2">
         <div className="flex items-center gap-3">
           <Button variant="ghost" className="shrink-0" disabled={running} onClick={() => void runExfil()}>
             Leak test <Kbd>E</Kbd>

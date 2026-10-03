@@ -97,7 +97,7 @@ function useAccordion(): [Open, (k: Exclude<Open, null>) => void] {
 function Desk() {
   const [open, toggle] = useAccordion()
   const vh = useViewportH()
-  const whyOpen = Math.round(clamp(vh * 0.36, 280, 420)) // queue, proof and decision + label row
+  const whyOpen = Math.round(clamp(vh * 0.35, 280, 420)) // queue, proof and decision + label row
   const behindOpen = Math.round(clamp(vh * 0.34, 250, 340)) // metric cards + label row
   const rise = (i: number) => ({
     initial: { opacity: 0, y: 12 },
@@ -105,22 +105,22 @@ function Desk() {
     transition: { duration: 0.45, ease: EASE, delay: 0.06 * i },
   })
   return (
-    <div className="dot-grid grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)_auto] gap-4 overflow-x-hidden px-6 pb-5">
-      <motion.div {...rise(0)} className="min-h-0">
+    <div className="dot-grid grid h-full min-h-[800px] grid-cols-[minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)_auto] gap-4 overflow-x-hidden px-6 pb-5">
+      <motion.div {...rise(0)} data-block="header" className="min-h-0 min-w-0">
         <Header />
       </motion.div>
-      <motion.div {...rise(1)} className="flex min-h-[320px] min-w-0 gap-4">
+      <motion.div {...rise(1)} className="flex min-h-0 min-w-0 gap-4">
         <div className="min-w-0 flex-1">
           <CallPanel />
         </div>
         <SuggestionBox />
       </motion.div>
-      <motion.div {...rise(2)} className="flex min-w-0 flex-col gap-4">
-        <Section title="Why this decision" summary={<WhySummary />} open={open === 'why'} onToggle={() => toggle('why')}
+      <motion.div {...rise(2)} data-block="details" className="flex min-w-0 flex-col gap-4">
+        <Section block="why" title="Why this decision" summary={<WhySummary />} open={open === 'why'} onToggle={() => toggle('why')}
           height={open === 'why' ? whyOpen : BAR_H}>
           <Pipeline />
         </Section>
-        <Section title="Behind the scenes" summary={<BehindSummary />} open={open === 'behind'} onToggle={() => toggle('behind')}
+        <Section block="behind" title="Behind the scenes" summary={<BehindSummary />} open={open === 'behind'} onToggle={() => toggle('behind')}
           height={open === 'behind' ? behindOpen : BAR_H}>
           <div className="grid h-full min-h-0 grid-cols-3 gap-4">
             <Expandable id="ring">

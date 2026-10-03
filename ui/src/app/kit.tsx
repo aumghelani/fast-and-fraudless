@@ -70,8 +70,8 @@ const GLOW_RGB = { hold: '229 72 77', verify: '212 138 0', clear: '23 163 90' } 
 const CARD_SHADOW = '0 1px 2px rgb(22 26 46 / 0.06), 0 8px 28px rgb(22 26 46 / 0.07)'
 
 /** Card whose edge glows: pulsing red on fraud while live, amber to verify, green when clear. */
-export function GlowCard({ tone, pulsing, className, children }: {
-  tone: keyof typeof GLOW_RGB | null; pulsing: boolean; className?: string; children: ReactNode
+export function GlowCard({ tone, pulsing, className, children, ...rest }: {
+  tone: keyof typeof GLOW_RGB | null; pulsing: boolean; className?: string; children: ReactNode; 'data-block'?: string
 }) {
   const still = usePrefersReducedMotion()
   const rgb = tone ? GLOW_RGB[tone] : null
@@ -80,7 +80,8 @@ export function GlowCard({ tone, pulsing, className, children }: {
   const pulse = !!rgb && pulsing && !still
   return (
     <motion.section
-      className={cx('rounded-[var(--radius-card)] bg-surface', className)}
+      {...rest}
+      className={cx('overflow-hidden rounded-[var(--radius-card)] bg-surface', className)}
       initial={false}
       animate={{ boxShadow: pulse ? [a, b, a] : a }}
       transition={pulse ? { duration: 1.6, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.5 }}

@@ -142,10 +142,10 @@ export function CallPanel() {
   const glow = !showCall ? null : v === 'NO_HOLD' ? 'clear' : v === 'HOLD' || flagged ? 'hold' : v === 'VERIFY' ? 'verify' : null
 
   return (
-    <GlowCard tone={glow} pulsing={view === 'live'} className="flex h-full min-h-0 flex-col">
+    <GlowCard tone={glow} pulsing={view === 'live'} className="flex h-full min-h-0 min-w-0 flex-col" data-block="replay">
       {/* who is on the line, and the controls */}
-      <div className="flex shrink-0 items-start gap-6 px-5 pt-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex shrink-0 flex-wrap items-start gap-x-6 gap-y-3 px-5 pt-4">
+        <div className="flex min-w-[240px] flex-1 flex-col gap-1">
           <div className="flex h-7 items-center gap-2">
             {view === 'live' && (
               <>
@@ -198,7 +198,7 @@ export function CallPanel() {
             )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-2.5">
           <Button className="px-3.5 text-[15px]" disabled={starting} onClick={() => ctl.replay('CALL-01')}>
             <Play size={13} className="text-mute" fill="currentColor" strokeWidth={0} />
             Margaret · replay
@@ -234,13 +234,13 @@ export function CallPanel() {
 
       {/* ring | transcript | rules, edge to edge */}
       <div className="flex min-h-0 flex-1 items-stretch gap-4 px-4 pb-4 pt-3">
-        <div className="relative aspect-square h-full max-h-[420px] shrink-0 self-center">
+        <div className="relative aspect-square h-full max-h-[min(420px,34vh)] shrink-0 self-center max-[1450px]:max-h-[min(240px,34vh)]">
           <VoiceRing3D active={view === 'live'} tone={tone} tilt={0.42} bars={96} className="absolute inset-0">
             <PhoneMark live={view === 'live'} still={still} />
           </VoiceRing3D>
         </div>
         <TranscriptBox call={call} view={view} still={still} lat={showCall ? lat : null} />
-        <div className="min-h-0 w-[38%] min-w-[400px] shrink-0">
+        <div className="min-h-0 w-[38%] min-w-[400px] shrink-0 max-[1700px]:min-w-[340px] max-[1450px]:min-w-[300px]">
           <RulesPanel call={showCall ? call : undefined} checks={checks} />
         </div>
       </div>

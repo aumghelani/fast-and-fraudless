@@ -32,8 +32,9 @@ export function useOpen(id: string, initial = true): [boolean, () => void] {
 export const BAR_H = 48
 
 /** A section with a quiet label row. Closed, it becomes a white bar with a one-line summary. */
-export function Section({ title, summary, open, onToggle, height, children }: {
+export function Section({ title, summary, open, onToggle, height, block, children }: {
   title: string
+  block?: string
   summary?: ReactNode
   open: boolean
   onToggle: () => void
@@ -47,6 +48,7 @@ export function Section({ title, summary, open, onToggle, height, children }: {
   })
   return (
     <motion.section
+      data-block={block}
       className="flex min-h-0 flex-col overflow-hidden"
       initial={false}
       animate={{ height }}

@@ -36,7 +36,7 @@ export function SuggestionBox() {
   useEffect(() => setAsked({}), [call?.call_id])
   const heardCues = Array.from(new Set((call?.cues ?? []).map((q) => String(q?.cue).toUpperCase()))).filter((k) => k !== 'AMOUNT_STATED')
   return (
-    <section className="card flex h-full w-[440px] shrink-0 flex-col overflow-hidden px-5 py-4">
+    <section data-block="suggestion" className="card flex h-full w-[440px] shrink-0 flex-col overflow-hidden px-5 py-4 max-[1700px]:w-[380px] max-[1450px]:w-[330px]">
       <header className="flex items-center gap-2 font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-ink-2">
         <Lightbulb className="size-4 text-accent" /> Suggestion
       </header>
