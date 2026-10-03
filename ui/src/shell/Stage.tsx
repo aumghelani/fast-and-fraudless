@@ -46,6 +46,7 @@ export function Stage() {
 
   return (
     <main className="relative min-h-0 flex-1 overflow-hidden">
+      <div aria-hidden className="dot-grid pointer-events-none absolute inset-0" />
       <motion.div
         className="absolute inset-0"
         initial={false}
