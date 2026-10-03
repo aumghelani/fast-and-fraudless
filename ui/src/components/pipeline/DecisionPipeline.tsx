@@ -5,6 +5,10 @@ import '@fontsource/racing-sans-one/latin-400.css'
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { Landmark, Phone } from 'lucide-react'
+import { AnimatedBeam } from '../magicui/animated-beam'
+import { AnimatedList } from '../magicui/animated-list'
+import { BorderBeam } from '../magicui/border-beam'
+import { NumberTicker } from '../magicui/number-ticker'
 import { cx } from '../../lib/format'
 import { EASE, usePrefersReducedMotion, type Verdict } from '../../ui/tokens'
 import type { CheckTone, DecisionPipelineProps, PipelineCase, PipelineCheck, QueueItem, QueueStatus } from './types'
@@ -79,27 +83,38 @@ export function DecisionPipeline({ call, queue, compact = false, className }: De
   const settled = phase === 'settled'
   const link = flowing ? 'text-accent' : settled ? 'text-accent/40' : 'text-line-2'
   const cardH = compact ? '4rem' : '5.5rem'
+  const beams = flowing && !reduced
+  const root = useRef<HTMLDivElement>(null)
+  const h0 = useRef<HTMLSpanElement>(null)
+  const h1 = useRef<HTMLSpanElement>(null)
+  const v0 = useRef<HTMLSpanElement>(null)
+  const v1 = useRef<HTMLSpanElement>(null)
 
   return (
-    <div className={cx('relative flex h-full min-h-0 w-full overflow-hidden', className)}>
+    <div ref={root} className={cx('relative flex h-full min-h-0 w-full overflow-hidden', className)}>
       <style>{CSS}</style>
 
-      {/* queue */}
-      <div className={cx('flex shrink-0 flex-col', compact ? 'w-60 gap-2' : 'w-[clamp(18rem,28%,26rem)] gap-3')}>
-        {Array.from({ length: CARDS }, (_, i) => {
+      {/* queue: AnimatedList shows its children reversed, so they go in oldest-first and the active card lands on top */}
+      <div className={cx('shrink-0', compact ? 'w-60' : 'w-[clamp(18rem,28%,26rem)]')}>
+        <AnimatedList delay={110} style={{ gap: compact ? '0.5rem' : '0.75rem' }}>
+        {Array.from({ length: CARDS }, (_, j) => {
+          const i = CARDS - 1 - j
           const it = queue[i]
           return it ? (
-            <QueueCard key={it.id} item={it} active={i === 0} compact={compact} h={cardH} />
+            <QueueCard key={it.id} item={it} active={i === 0} beam={i === 0 && beams} compact={compact} h={cardH} />
           ) : (
             <SkeletonCard key={`sk${i}`} h={cardH} compact={compact} />
           )
         })}
+        </AnimatedList>
       </div>
 
       {/* queue -> rules */}
       <div className={cx('relative shrink-0', compact ? 'w-8' : 'w-16')}>
         <div className={cx('absolute inset-x-0 h-4', link)} style={{ top: `calc(${cardH} / 2 - 0.5rem)` }}>
-          <Dots dir="h" flowing={flowing && !reduced} />
+          <Dots dir="h" flowing={false} />
+          <span ref={h0} className="absolute top-1/2 left-0" />
+          <span ref={h1} className="absolute top-1/2 right-0" />
         </div>
       </div>
 
@@ -107,10 +122,26 @@ export function DecisionPipeline({ call, queue, compact = false, className }: De
         <RulesPanel call={call} cells={cells} over={over} phase={phase} revealed={revealed} compact={compact} />
         {/* rules -> decision */}
         <div className={cx('relative ml-12 w-4 shrink-0', compact ? 'h-6' : 'h-10', link)}>
-          <Dots dir="v" flowing={flowing && !reduced} />
+          <Dots dir="v" flowing={false} />
+          <span ref={v0} className="absolute top-0 left-1/2" />
+          <span ref={v1} className="absolute bottom-0 left-1/2" />
         </div>
         <DecisionPanel call={call} phase={phase} reduced={reduced} compact={compact} />
       </div>
+
+      {/* traveling light on the connectors, only while a wire is being processed */}
+      {beams && (
+        <>
+          <AnimatedBeam
+            containerRef={root} fromRef={h0} toRef={h1} pathOpacity={0} pathWidth={3} duration={1.4}
+            gradientStartColor="var(--color-accent)" gradientStopColor="var(--color-accent)"
+          />
+          <AnimatedBeam
+            containerRef={root} fromRef={v0} toRef={v1} pathOpacity={0} pathWidth={3} duration={1.4} delay={0.4}
+            gradientStartColor="var(--color-accent)" gradientStopColor="var(--color-accent)"
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -128,20 +159,23 @@ function Dots({ dir, flowing }: { dir: 'h' | 'v'; flowing: boolean }) {
   )
 }
 
-function QueueCard({ item, active, compact, h }: { item: QueueItem; active: boolean; compact: boolean; h: string }) {
+function QueueCard({ item, active, beam, compact, h }: {
+  item: QueueItem; active: boolean; beam: boolean; compact: boolean; h: string
+}) {
   const st = STATUS[item.status]
   const Icon = item.kind === 'payment' ? Landmark : Phone
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: active ? 1 : 0.5, y: 0 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: active ? 1 : 0.5 }}
       transition={{ duration: 0.4, ease: EASE }}
       className={cx(
-        'flex shrink-0 items-center gap-4 rounded-xl border px-4',
+        'relative flex shrink-0 items-center gap-4 rounded-xl border px-4',
         active ? 'border-accent/60 bg-surface-2' : 'border-line bg-surface',
       )}
       style={{ height: h }}
     >
+      {beam && <BorderBeam size={64} duration={3} borderWidth={1.5} colorFrom="var(--color-accent)" colorTo="var(--color-accent)" />}
       <span
         className={cx(
           'grid shrink-0 place-items-center rounded-full',
@@ -286,7 +320,11 @@ function DecisionPanel({ call, phase, reduced, compact }: { call: PipelineCase |
           {risk == null ? (
             <span className="tnum text-faint">--</span>
           ) : (
-            <Odometer key={`${call?.id}|${call?.verdict}`} value={risk} roll={!reduced} />
+            reduced ? (
+              <span className="tnum text-ink">{risk}</span>
+            ) : (
+              <NumberTicker key={`${call?.id}|${call?.verdict}`} value={risk} className="font-num" style={{ color: 'var(--color-ink)' }} />
+            )
           )}
           <span className={cx('text-mute', compact ? 'text-lead' : 'text-title')}>/100</span>
         </div>
@@ -352,35 +390,5 @@ function Slider({ pos, verdict, reduced }: { pos: number; verdict: Verdict | nul
         </motion.div>
       </div>
     </div>
-  )
-}
-
-/** Two rolling reels; the ones reel spins twice on the way up. Transform only. */
-function Odometer({ value, roll }: { value: number; roll: boolean }) {
-  const v = Math.max(0, Math.min(99, Math.round(value)))
-  return (
-    <span className="tnum inline-flex text-ink" aria-label={String(v)}>
-      <Reel n={10} index={Math.floor(v / 10)} roll={roll} duration={0.9} />
-      <Reel n={30} index={20 + (v % 10)} roll={roll} duration={1} />
-    </span>
-  )
-}
-
-function Reel({ n, index, roll, duration }: { n: number; index: number; roll: boolean; duration: number }) {
-  return (
-    <span aria-hidden className="relative inline-block h-[1em] w-[0.5em] overflow-hidden">
-      <motion.span
-        className="absolute inset-x-0 top-0 flex flex-col"
-        initial={roll ? { y: '0%' } : false}
-        animate={{ y: `${(-index / n) * 100}%` }}
-        transition={roll ? { duration, ease: EASE } : { duration: 0 }}
-      >
-        {Array.from({ length: n }, (_, i) => (
-          <span key={i} className="block h-[1em] text-center leading-none">
-            {i % 10}
-          </span>
-        ))}
-      </motion.span>
-    </span>
   )
 }
