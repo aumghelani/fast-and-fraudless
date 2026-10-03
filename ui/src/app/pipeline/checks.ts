@@ -1,7 +1,7 @@
 // Pure mapping: a live call -> the checks, status and risk index the hero shows.
 import type { Call } from '../../lib/types'
 import { usd } from '../../lib/format'
-import { heardOf, sentencesOf, verdictOf, type Verdict } from '../selectors'
+import { heardOf, verdictOf, type Verdict } from '../selectors'
 
 export type CheckTone = 'flag' | 'pass' | 'info'
 export interface Check { id: string; label: string; value: string; quote?: string; tone: CheckTone }
@@ -36,9 +36,9 @@ export function checksOf(c: Call): Check[] {
   const out: Check[] = []
   // nothing is checked on screen before the customer has spoken
   if (!heardOf(c)) return out
-  // account checks run once the wire is asked for (amount heard), or after two sentences
-  const asked = !!c.ended || (c.cues ?? []).some((q) => String(q?.cue).toUpperCase() === 'AMOUNT_STATED') || sentencesOf(c) >= 2
-  if (asked) accountChecks(c, out)
+  // account checks (payee ring, first wire, amount) appear once the rules have run on heard words;
+  // before that the payee check is only an empty default
+  if (c.recommendation || c.ended) accountChecks(c, out)
   cueChecks(c, out)
   return out
 }

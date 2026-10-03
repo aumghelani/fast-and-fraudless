@@ -41,7 +41,7 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
   const visible = checks.slice(0, shown)
   const cur = shown - 1
   return (
-    <Card bar title="Rules & Checks" right={call ? `${flagged} of ${checks.length} flagged` : '—'} className="h-full"
+    <Card bar title="Rules & Checks" right={!call ? '—' : checks.length ? `${flagged} of ${checks.length} flagged` : 'listening…'} className="h-full"
       bodyClassName="relative px-4 py-4">
       {!call || checks.length === 0 ? (
         <div className="flex h-full flex-col justify-center gap-3 px-2">

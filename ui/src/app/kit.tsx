@@ -50,7 +50,7 @@ export function Button({ variant = 'ghost', className, ...p }: ButtonHTMLAttribu
     <button
       {...p}
       className={cx(
-        'inline-flex h-10 items-center gap-2 rounded-lg px-4 text-[15px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-4 text-[15px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         variant === 'primary' && 'bg-accent text-white hover:opacity-90',
         variant === 'hold' && 'bg-hold-fill text-white hover:opacity-90',
         variant === 'ghost' && 'border border-line-2 bg-surface text-ink hover:bg-surface-2',

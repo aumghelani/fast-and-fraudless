@@ -5,6 +5,7 @@ import { Landmark, PhoneCall } from 'lucide-react'
 import type { Call } from '../lib/types'
 import { cx } from '../lib/format'
 import { BorderBeam } from '../components/magicui/border-beam'
+import { patchLocal } from '../lib/store'
 import { useActiveCall, useCallsNewestFirst, usePrefersReducedMotion, verdictOf } from './selectors'
 import { STATUS_TEXT, checksOf, customerName, riskIndex, statusOf, wireTitle, type QueueStatus } from './pipeline/checks'
 import { DecisionPanel, RulesPanel } from './pipeline/Panels'
@@ -141,9 +142,12 @@ export function Pipeline() {
           <span>Wire queue</span>
           <span className="normal-case tracking-normal text-mute">{calls.length ? `${calls.length} today` : '—'}</span>
         </div>
-        <div className="flex min-h-0 flex-col gap-3">
+        <div className="flex min-h-0 flex-col gap-3 overflow-hidden [mask-image:linear-gradient(to_bottom,#000_76%,transparent)]">
           {queue.map((c) => (
-            <QueueCard key={c.call_id} call={c} active={c.call_id === activeId} innerRef={c.call_id === activeId ? card : undefined} />
+            // click a wire to look at its checks and decision
+            <div key={c.call_id} className="cursor-pointer transition-transform hover:-translate-y-0.5" onClick={() => patchLocal({ activeCallId: c.call_id })}>
+              <QueueCard call={c} active={c.call_id === activeId} innerRef={c.call_id === activeId ? card : undefined} />
+            </div>
           ))}
           {Array.from({ length: queue.length ? 2 : 3 }, (_, i) => <SkeletonCard key={i} i={i} />)}
         </div>
