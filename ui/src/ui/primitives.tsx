@@ -97,10 +97,11 @@ export function Stat({ value, label, den, size = 'title', note, className }: {
 }) {
   const [v, d] = STAT[size]
   return (
-    <div className={cx('flex flex-col gap-2', className)}>
+    <div className={cx('flex flex-col gap-3', className)}>
+      {/* trim-cap: Teko's tall line box would leave a gap between the number and its label */}
       <div className="tnum flex items-baseline gap-2 font-num font-bold leading-none">
-        <span className={cx(v, 'leading-none')}>{value}</span>
-        {den != null && <span className={cx(d, 'font-semibold leading-none text-mute')}>/ {den}</span>}
+        <span className={cx(v, 'trim-cap leading-none')}>{value}</span>
+        {den != null && <span className={cx(d, 'trim-cap font-semibold leading-none text-mute')}>/ {den}</span>}
       </div>
       <div className="text-body text-ink-2">{label}</div>
       {note != null && note !== '' && <div className="text-meta text-mute">{note}</div>}
