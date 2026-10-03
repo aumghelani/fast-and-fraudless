@@ -11,6 +11,8 @@
   The agent's skill fetches GET /api/agent/case/<id> and POSTs /api/agent/sar (see agent_api.py).
 * Case status / timeline go to Mongo `cases` and the SSE bus (`case` events). If the agent run ends
   without a SAR arriving, the case is marked error ("no SAR submitted"): we never pretend.
+* Self-healing: a sweeper re-queues interrupted runs (orphaned woke/investigating cases, killed CLI runs)
+  and retries failed ones after 30/120/300 s, at most 3 times per case.
 Nothing here may crash the backend: every loop logs and retries.
 """
 from __future__ import annotations
@@ -19,6 +21,7 @@ import itertools
 import json
 import os
 import queue
+import socket
 import subprocess
 import threading
 import time
@@ -35,11 +38,20 @@ from .prompts import INLINE_PROMPT, WAKE_PROMPT  # noqa: E402
 AGENT_MODE = os.environ.get("TW_AGENT_MODE", "inline")
 TIMELINE_MAX = 50
 _TERMINAL = {"sar_drafted", "approved", "rejected"}
+RESUME_MAX = int(os.environ.get("TW_AGENT_RESUME_MAX", "3"))    # re-queues per case
+BACKOFF_S = (30, 120, 300)                                       # error -> retry delays
+SWEEP_S = float(os.environ.get("TW_AGENT_SWEEP_S", "15"))
+LEASE_KEY = "agent_bridge_lease"
+RESUME_PRIO = -1e300                    # interrupted runs go first (a forced demo run is -inf)
 
 _q: queue.PriorityQueue = queue.PriorityQueue()
 _seq = itertools.count()
 _queued: set[str] = set()
+_inflight: dict[str, float] = {}       # ring id -> dequeue time (this process)
 _qlock = threading.Lock()
+_kick = threading.Event()              # run the sweeper now (set after every run)
+_swept = threading.Event()             # first sweep done: workers may start
+_leader = threading.Event()            # this process holds the bridge lease
 _started = False
 _start_lock = threading.Lock()
 
@@ -80,15 +92,21 @@ def update_case(ring_id: str, msg: str | None = None, status: str | None = None,
 
 
 # ------------------------------------------------------------------ queue
-def enqueue(ring_id: str, total_usd: float = 0.0, reason: str = "change stream", force: bool = False) -> bool:
+def enqueue(ring_id: str, total_usd: float = 0.0, reason: str = "change stream", force: bool = False,
+            prio: float | None = None) -> bool:
     """Queue a ring for investigation (largest total first). force=True re-runs / jumps the queue (demo)."""
     with _qlock:
-        if ring_id in _queued and not force:
+        if (ring_id in _queued or ring_id in _inflight) and not force:
             return False
         _queued.add(ring_id)
-    prio = float("-inf") if force else -float(total_usd or 0.0)
-    _q.put((prio, next(_seq), ring_id, reason, time.time()))
+    p = float("-inf") if force else (prio if prio is not None else -float(total_usd or 0.0))
+    _q.put((p, next(_seq), ring_id, reason, time.time()))
     return True
+
+
+def _busy(ring_id: str) -> bool:
+    with _qlock:
+        return ring_id in _queued or ring_id in _inflight
 
 
 def _has_case(ring_id: str) -> bool:
@@ -99,7 +117,7 @@ def _consider(doc: dict, reason: str) -> bool:
     if not doc or doc.get("tier") != "escalate":
         return False
     rid = doc.get("_id")
-    if not rid or rid in _queued or _has_case(rid):
+    if not rid or _busy(rid) or _has_case(rid):
         return False
     return enqueue(rid, doc.get("total_usd") or 0.0, reason)
 
@@ -201,17 +219,19 @@ def _sar_since(ring_id: str, since_ms: int) -> dict | None:
     return db().sar_drafts.find_one({"_id": "SAR-" + ring_id, "received_at_ms": {"$gte": since_ms}})
 
 
+def _killed(rc: int | None) -> bool:
+    """CLI ended by a signal (kill -9, OOM, supervisor stop): not the agent's fault, retry at once."""
+    return rc is not None and (rc < 0 or rc in (137, 143))
+
+
 def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0) -> None:
     update_case(ring_id, f"woke via {reason} (queued {queued_s:.0f} s)", status="woke", keep_if=_TERMINAL)
-    # from here on the case doc is the dedupe key; dropping it from _queued lets a ring id be re-used
-    # after `ringfinder --reset` (which clears cases and restarts ids at R-001)
-    with _qlock:
-        _queued.discard(ring_id)
     if AGENT_MODE == "inline":
         from .agent_api import case_pack   # lazy: agent_api imports this module
         ring = db().rings.find_one({"_id": ring_id})
         if not ring:
-            update_case(ring_id, "error: ring not found in Mongo", status="error", keep_if=_TERMINAL)
+            update_case(ring_id, "error: ring not found in Mongo", status="error", keep_if=_TERMINAL,
+                        retryable=False)
             return
         prompt = INLINE_PROMPT.format(ring_id=ring_id, case=case_pack(ring))
         update_case(ring_id, "agent reading case file (inline)", status="investigating", keep_if=_TERMINAL)
@@ -221,14 +241,14 @@ def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0
            f"ring-{ring_id}-{now_ms()}", "--json", "-m", prompt]
     t0 = time.time()
     t0_ms = now_ms()
-    stdout, err = "", None
+    stdout, err, rc, permanent = "", None, None, False
     try:
         p = nemoclaw_cli.run(cmd, timeout=settings.agent_timeout_s)  # serialized (E-014)
-        stdout = p.stdout or ""
+        stdout, rc = p.stdout or "", p.returncode
         if p.returncode != 0:
             err = f"agent exited {p.returncode}: {(p.stderr or p.stdout or '').strip()[-300:]}"
     except FileNotFoundError:
-        err = f"nemoclaw not found at {settings.nemoclaw_bin}"
+        err, permanent = f"nemoclaw not found at {settings.nemoclaw_bin}", True
     except subprocess.TimeoutExpired as e:
         stdout = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
         err = f"agent timed out after {settings.agent_timeout_s} s"
@@ -261,24 +281,145 @@ def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0
         log(f"{ring_id}: {msg}")
     else:
         why = err or f"agent finished in {dt:.0f} s without posting one"
-        update_case(ring_id, f"error: no SAR submitted ({why})", status="error", keep_if=_TERMINAL)
+        _failed(ring_id, why, killed=_killed(rc), retryable=not permanent)
         log(f"{ring_id}: no SAR ({why}); reply: {reply[:200]!r}")
 
 
+def _failed(ring_id: str, why: str, killed: bool = False, retryable: bool = True) -> None:
+    """Mark a run without a SAR; schedule a retry unless the error is permanent or retries are used up."""
+    try:
+        att = int((db().cases.find_one({"_id": ring_id}, {"attempts": 1}) or {}).get("attempts") or 0)
+    except Exception:
+        att = 0
+    msg = f"error: no SAR submitted ({why})"
+    if retryable and att < RESUME_MAX:
+        delay = 0 if killed else BACKOFF_S[min(att, len(BACKOFF_S) - 1)]
+        msg += "; run was killed, resuming" if killed else f"; retry in {delay} s"
+        update_case(ring_id, msg, status="error", keep_if=_TERMINAL, retryable=True, interrupted=killed,
+                    retry_at_ms=now_ms() + delay * 1000)
+    else:
+        msg += f"; gave up after {att + 1} attempts" if retryable else ""
+        update_case(ring_id, msg, status="error", keep_if=_TERMINAL, retryable=False)
+
+
+# ------------------------------------------------------------------ self-healing
+def _alive_backend(pid) -> bool:
+    try:
+        with open(f"/proc/{int(pid)}/cmdline", "rb") as fh:
+            return b"backend.app" in fh.read()
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return True
+
+
+def _hold_lease() -> bool:
+    """One active bridge per box: a second (orphaned) backend must not run or steal cases."""
+    ws, now = db().watch_state, now_ms()
+    me = {"pid": os.getpid(), "host": socket.gethostname()}
+    doc = ws.find_one({"_id": LEASE_KEY})
+    if doc and (doc.get("pid"), doc.get("host")) != (me["pid"], me["host"]):
+        fresh = now - int(doc.get("renewed_ms") or 0) < 4 * SWEEP_S * 1000
+        if fresh and (doc.get("host") != me["host"] or _alive_backend(doc.get("pid"))):
+            return False
+    flt = {"_id": LEASE_KEY, "renewed_ms": doc.get("renewed_ms")} if doc else {"_id": LEASE_KEY}
+    try:
+        res = ws.update_one(flt, {"$set": {**me, "renewed_ms": now}}, upsert=doc is None)
+        return bool(res.matched_count or res.upserted_id is not None)
+    except Exception:   # lost the race to another backend
+        return False
+
+
+def _resume(ring_id: str, attempts: int, why: str, front: bool) -> bool:
+    """Put a case back in the queue and record the attempt on its timeline."""
+    ring = db().rings.find_one({"_id": ring_id}, {"total_usd": 1})
+    if not ring:
+        update_case(ring_id, "error: ring no longer in Mongo; not resuming", status="error",
+                    keep_if=_TERMINAL, retryable=False)
+        return False
+    update_case(ring_id, f"resumed {why} (attempt {attempts + 1})", status="woke", keep_if=_TERMINAL,
+                attempts=attempts, retry_at_ms=None, interrupted=False)
+    return enqueue(ring_id, ring.get("total_usd") or 0.0, f"resume {why}", prio=RESUME_PRIO if front else None)
+
+
+def _sweep(startup: bool) -> int:
+    """Re-queue interrupted cases and due retries. At startup nothing runs here yet, so every
+    woke/investigating case was left behind by a killed process."""
+    now, n = now_ms(), 0
+    stuck_ms = (settings.agent_timeout_s + 60) * 1000
+    cur = db().cases.find({"status": {"$in": ["woke", "investigating", "error"]}},
+                          {"status": 1, "attempts": 1, "retry_at_ms": 1, "retryable": 1, "interrupted": 1,
+                           "timeline": {"$slice": -1}})
+    for c in list(cur):
+        rid = c["_id"]
+        if _busy(rid):
+            continue
+        att = int(c.get("attempts") or 0)
+        last = int(((c.get("timeline") or [{}])[-1] or {}).get("ts") or 0)
+        if c.get("status") == "error":
+            if c.get("retryable") is False or att >= RESUME_MAX:
+                continue
+            due = c.get("retry_at_ms")
+            if due is None:
+                due = last + BACKOFF_S[min(att, len(BACKOFF_S) - 1)] * 1000
+            interrupted = bool(c.get("interrupted"))
+            if now < due or (not interrupted and _q.qsize() >= 2):   # old failures trickle in behind live rings
+                continue
+            n += _resume(rid, att + 1, "after interruption" if interrupted else "after error", front=interrupted)
+        elif startup or now - last > stuck_ms:
+            if att >= RESUME_MAX:
+                update_case(rid, f"error: interrupted after {att} resumes; not resuming", status="error",
+                            keep_if=_TERMINAL, retryable=False)
+                continue
+            n += _resume(rid, att + 1, "after interruption", front=True)
+    return n
+
+
+def _sweeper() -> None:
+    startup, standby = True, False
+    while True:
+        try:
+            if _hold_lease():
+                _leader.set()
+                n = _sweep(startup)
+                if n or startup:
+                    log(f"sweep{' at startup' if startup else ''}: re-queued {n} case(s)")
+                startup, standby = False, False
+            else:
+                _leader.clear()
+                if not standby:
+                    log("another live backend holds the bridge lease: standby")
+                standby = True
+        except Exception as e:
+            log(f"sweep failed: {e}")
+        finally:
+            _swept.set()
+        _kick.wait(SWEEP_S)
+        _kick.clear()
+
+
 def _worker(n: int) -> None:
+    _swept.wait(30)   # let the startup sweep queue interrupted cases first
     while True:
         prio, _, ring_id, reason, t_q = _q.get()
-        waited = priority.wait_until_quiet()   # real-time first: never start an investigation mid-call
-        if waited > 1:
-            log(f"{ring_id}: waited {waited:.0f} s for a live call to finish")
+        _leader.wait()   # standby while another live backend owns the bridge
+        with _qlock:     # the case doc is the dedupe key from here on (ids restart after ringfinder --reset)
+            _queued.discard(ring_id)
+            if ring_id in _inflight:
+                continue
+            _inflight[ring_id] = time.time()
         try:
+            waited = priority.wait_until_quiet()   # real-time first: never start an investigation mid-call
+            if waited > 1:
+                log(f"{ring_id}: waited {waited:.0f} s for a live call to finish")
             run_agent(ring_id, reason, time.time() - t_q)
         except Exception as e:
             log(f"worker {n} crashed on {ring_id}: {e}")
-            update_case(ring_id, f"error: bridge failure ({e})", status="error", keep_if=_TERMINAL)
+            _failed(ring_id, f"bridge failure ({e})")
         finally:
             with _qlock:
-                _queued.discard(ring_id)
+                _inflight.pop(ring_id, None)
+            _kick.set()
 
 
 def start() -> None:
@@ -287,10 +428,12 @@ def start() -> None:
         if _started:
             return
         _started = True
+    threading.Thread(target=_sweeper, name="agent-sweeper", daemon=True).start()
     threading.Thread(target=_watch, name="agent-watch", daemon=True).start()
     for i in range(max(1, settings.agent_concurrency)):
         threading.Thread(target=_worker, args=(i,), name=f"agent-worker-{i}", daemon=True).start()
-    log(f"started: {settings.agent_concurrency} worker(s), sandbox={settings.sandbox}, bin={settings.nemoclaw_bin}")
+    log(f"started: {settings.agent_concurrency} worker(s), sandbox={settings.sandbox}, bin={settings.nemoclaw_bin}, "
+        f"sweep every {SWEEP_S:.0f} s, up to {RESUME_MAX} resumes per case")
 
 
 def queue_size() -> int:
