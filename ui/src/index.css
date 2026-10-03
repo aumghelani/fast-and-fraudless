@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* One danger red, one safe green, amber for verify, NVIDIA green as a sparing accent. Everything else grey. */
+@theme {
+  --font-sans: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  --color-bg: #06080c;
+  --color-panel: #0c1016;
+  --color-panel-2: #11161e;
+  --color-line: #1d2430;
+  --color-line-2: #2a3342;
+  --color-ink: #e8edf4;
+  --color-ink-2: #aab4c3;
+  --color-mute: #6b7686;
+  --color-dim: #3d4654;
+
+  --color-danger: #ff3b3b;
+  --color-danger-ink: #ff8a8a;
+  --color-safe: #2fd27a;
+  --color-amber: #f5a524;
+  --color-nv: #76b900;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  overflow: hidden;
+}
+
+/* Responsive root size: 1920 wide -> 16px, 1440 wide -> 12px. Everything is in rem so the layout scales. */
+html {
+  font-size: clamp(11px, calc(100vw / 120), 18px);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.app-bg {
+  background:
+    radial-gradient(1200px 700px at 12% 30%, rgba(255, 59, 59, 0.05), transparent 60%),
+    radial-gradient(1000px 600px at 85% 15%, rgba(118, 185, 0, 0.035), transparent 60%),
+    radial-gradient(900px 700px at 50% 110%, rgba(80, 110, 160, 0.06), transparent 60%),
+    var(--color-bg);
+}
+
+/* glass panels: translucent, blurred, with a top highlight and a soft drop shadow for depth */
+.panel {
+  background: linear-gradient(180deg, rgba(20, 26, 36, 0.72) 0%, rgba(11, 14, 20, 0.78) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0.9rem;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 18px 40px -18px rgba(0, 0, 0, 0.8),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+}
+
+.glass {
+  background: rgba(10, 13, 19, 0.72);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+}
+
+.glass-strong {
+  background: linear-gradient(180deg, rgba(14, 18, 25, 0.92), rgba(8, 10, 15, 0.96));
+  box-shadow: 0 -10px 30px -12px rgba(0, 0, 0, 0.7);
+}
+
+.panel-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+  font-weight: 600;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #2a3342 transparent;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #2a3342;
+  border-radius: 3px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-line-2);
+  background: var(--color-panel-2);
+  color: var(--color-ink);
+  padding: 0.45rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: #18202b;
+  border-color: #3a4558;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--color-mute);
+  border: 1px solid var(--color-line-2);
+  border-radius: 0.25rem;
+  padding: 0 0.3rem;
+  line-height: 1.2rem;
+}
+
+mark {
+  background: transparent;
+  color: inherit;
+}
+
+.sigma-container canvas {
+  outline: none;
+}
