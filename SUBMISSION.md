@@ -42,8 +42,8 @@ Margaret, 78, calls her bank to wire $40,000 "for her grandson's bail". While sh
 - **Measured on the GB10:**
   - **Scam calls caught 5/5, false holds 0/5.** Ten synthetic calls run through Parakeet → Nemotron cue reading → deterministic rules. The legitimate $85k house closing gets VERIFY, not HOLD.
   - **Ring finder** over all 31.9M IBM AML transactions:
-    - 758 of 2,755 labelled laundering attempts recovered.
-    - Fan-in 179/355, fan-out 168/345, gather-scatter 189/321, scatter-gather 169/331.
+    - 801 of 2,755 labelled laundering attempts recovered (736 by escalated rings alone).
+    - Fan-in 184/355, fan-out 171/345, gather-scatter 206/321, scatter-gather 176/331.
     - Escalation tier precision 40.9% versus 4.2% for all flagged rings, so analysts see a 10x cleaner queue.
     - Cycle, stack and bipartite patterns are out of scope, and we say so.
   - **SAR drafts:** citations are machine-verified. On the demo ring, 13/13 transaction ids and amounts were verified; on another ring the validator caught a wrong citation before an analyst saw it.
