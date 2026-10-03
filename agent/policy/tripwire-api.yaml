@@ -1,0 +1,31 @@
+# NemoClaw custom policy preset: the Tripwire case API on the host, for the investigator skill.
+#
+# Lets the sandbox reach the backend on the host at :8790, GET + POST under /api/agent/ only,
+# from curl only. Nothing else on the host (the UI, /api/sar decisions, /api/events) is reachable.
+#
+#   nemoclaw tripwire policy add --from-file agent/policy/tripwire-api.yaml --dry-run
+#   nemoclaw tripwire policy add --from-file agent/policy/tripwire-api.yaml --yes
+#
+# allowed_ips is permitted only for the host.openshell.internal bridge endpoint (same range as
+# NemoClaw's local-inference preset; cs2112 lks-search-policy.yaml pattern). enforcement MUST be
+# "enforce": the default "audit" allows everything.
+
+preset:
+  name: tripwire-api
+  description: "Tripwire case API on the host (GET/POST /api/agent/** from curl only)"
+
+network_policies:
+  tripwire_api:
+    name: tripwire_api
+    endpoints:
+      - host: host.openshell.internal
+        port: 8790
+        protocol: rest
+        enforcement: enforce
+        allowed_ips:
+          - 172.16.0.0/12
+        rules:
+          - allow: { method: GET, path: "/api/agent/**" }
+          - allow: { method: POST, path: "/api/agent/**" }
+    binaries:
+      - { path: /usr/bin/curl }
