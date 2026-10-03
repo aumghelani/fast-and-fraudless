@@ -27,25 +27,25 @@ export function AgentCard() {
     <Card title="Investigator agent" right="OpenShell sandbox" className="h-full" bodyClassName="flex flex-col px-5 pb-4 pt-3">
       {!sar ? (
         <div className="flex flex-1 flex-col justify-center gap-2">
-          <p className="text-[15px] text-ink-2">Waiting for an escalated ring…</p>
-          <p className="font-mono text-[12px] text-mute">
+          <p className="text-[16px] text-ink-2">Waiting for an escalated ring…</p>
+          <p className="font-mono text-[13px] text-mute">
             <span className="tnum">{num(openCases)}</span> open {openCases === 1 ? 'case' : 'cases'}
           </p>
         </div>
       ) : (
         <>
           <div className="flex items-center gap-2">
-            <span className="truncate font-mono text-[14px] font-medium text-ink">{sar.ring_id}</span>
-            {ring?.type && <span className="truncate text-[13px] text-ink-2">{ring.type.replace(/_/g, ' ')}</span>}
+            <span className="truncate font-mono text-[15px] font-medium text-ink">{sar.ring_id}</span>
+            {ring?.type && <span className="truncate text-[14px] text-ink-2">{ring.type.replace(/_/g, ' ')}</span>}
             {linked && (
-              <Pill tone="accent" className="ml-auto shrink-0 px-2 py-0.5 text-[11px]">
+              <Pill tone="accent" className="ml-auto shrink-0 px-2 py-0.5 text-[12px]">
                 payee's ring
               </Pill>
             )}
           </div>
 
           <ol className="mt-2.5 flex flex-col gap-1">
-            {steps.length === 0 && <li className="font-mono text-[12px] text-mute">{DASH}</li>}
+            {steps.length === 0 && <li className="font-mono text-[13px] text-mute">{DASH}</li>}
             <AnimatePresence initial={false}>
               {steps.map((s, i) => {
                 const last = i === steps.length - 1
@@ -59,8 +59,8 @@ export function AgentCard() {
                     transition={{ duration: reduced ? 0 : 0.3, ease: EASE }}
                   >
                     <span className={cx('h-1.5 w-1.5 rounded-full', last ? 'bg-accent' : 'bg-faint')} />
-                    <span className="tnum font-mono text-[12px] text-mute">{hms(s.ts)}</span>
-                    <span className={cx('truncate text-[13px]', last ? 'text-ink' : 'text-ink-2')}>{s.text}</span>
+                    <span className="tnum font-mono text-[13px] text-mute">{hms(s.ts)}</span>
+                    <span className={cx('truncate text-[14px]', last ? 'text-ink' : 'text-ink-2')}>{s.text}</span>
                   </motion.li>
                 )
               })}
@@ -81,7 +81,7 @@ function Citations({ sar }: { sar: Sar }) {
   const ids = cites.filter((c) => c.txn_id).slice(0, 4)
   return (
     <div className="mt-2.5 flex flex-col gap-2 border-t border-line pt-2.5">
-      <div className="flex items-center gap-2 font-mono text-[13px] text-ink">
+      <div className="flex items-center gap-2 font-mono text-[14px] text-ink">
         {total > 0 && invalid === 0 ? (
           <Check className="h-4 w-4 text-clear" strokeWidth={2.5} aria-hidden />
         ) : total > 0 ? (
@@ -98,7 +98,7 @@ function Citations({ sar }: { sar: Sar }) {
               key={`${c.txn_id}-${i}`}
               title={c.reason || undefined}
               className={cx(
-                'inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px]',
+                'inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[12px]',
                 c.valid ? 'bg-surface-2 text-ink-2' : 'bg-hold-soft text-hold',
               )}
             >
@@ -154,9 +154,9 @@ function Decision({ sar }: { sar: Sar }) {
         </>
       )}
       {err ? (
-        <p className="text-[12px] leading-snug text-hold">Not saved · try again</p>
+        <p className="text-[13px] leading-snug text-hold">Not saved · try again</p>
       ) : (
-        <p className="text-[12px] leading-snug text-mute">
+        <p className="text-[13px] leading-snug text-mute">
           Draft for analyst review ·<br />
           never filed automatically
         </p>

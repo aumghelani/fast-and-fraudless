@@ -1,5 +1,5 @@
 // Interaction helpers: sections that minimise into a summary bar, and cards that expand into a large view.
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronDown, Maximize2, X } from 'lucide-react'
 import { cx } from '../lib/format'
@@ -40,12 +40,17 @@ export function Section({ title, summary, open, onToggle, height, children }: {
   height: number
   children: ReactNode
 }) {
+  const was = useRef(open)
+  const toggled = was.current !== open
+  useEffect(() => {
+    was.current = open
+  })
   return (
     <motion.section
       className="flex min-h-0 flex-col overflow-hidden"
       initial={false}
       animate={{ height }}
-      transition={{ duration: 0.42, ease: EASE }}
+      transition={{ duration: toggled ? 0.42 : 0, ease: EASE }}
     >
       <button
         onClick={onToggle}
@@ -55,7 +60,7 @@ export function Section({ title, summary, open, onToggle, height, children }: {
           open ? 'h-8 px-1' : 'card h-12 px-5 hover:bg-surface-2',
         )}
       >
-        <span className="shrink-0 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-ink-2">{title}</span>
+        <span className="shrink-0 font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-ink-2">{title}</span>
         <AnimatePresence initial={false}>
           {!open && summary != null && (
             <motion.span
@@ -64,13 +69,13 @@ export function Section({ title, summary, open, onToggle, height, children }: {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
-              className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink"
+              className="min-w-0 flex-1 truncate font-mono text-[14px] text-ink"
             >
               {summary}
             </motion.span>
           )}
         </AnimatePresence>
-        <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] text-mute group-hover:text-ink">
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 font-mono text-[13px] text-mute group-hover:text-ink">
           {open ? 'Minimise' : 'Expand'}
           <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3, ease: EASE }} className="inline-flex">
             <ChevronDown className="size-4" />
@@ -81,7 +86,7 @@ export function Section({ title, summary, open, onToggle, height, children }: {
         {open && (
           <motion.div
             key="body"
-            className="mt-1 min-h-0 flex-1"
+            className="mt-1 min-h-0 flex-1 px-1 pb-2"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, transition: { duration: 0.15 } }}
@@ -124,7 +129,7 @@ export function Expandable({ id, children }: { id: string; children: ReactNode }
         style={{ visibility: big ? 'hidden' : 'visible' }}
       >
         {children}
-        <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-md bg-surface/90 px-2 py-1 font-mono text-[11px] text-mute opacity-0 shadow-card transition-opacity group-hover:opacity-100">
+        <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-md bg-surface/90 px-2 py-1 font-mono text-[12px] text-mute opacity-0 shadow-card transition-opacity group-hover:opacity-100">
           <Maximize2 className="size-3" /> expand
         </span>
       </motion.div>
@@ -147,7 +152,7 @@ export function Expandable({ id, children }: { id: string; children: ReactNode }
               {children}
               <button
                 onClick={() => setBig(false)}
-                className="absolute -top-12 right-0 inline-flex h-9 items-center gap-1.5 rounded-lg bg-surface px-3 font-mono text-[12px] text-ink-2 shadow-card hover:text-ink"
+                className="absolute -top-12 right-0 inline-flex h-9 items-center gap-1.5 rounded-lg bg-surface px-3 font-mono text-[13px] text-ink-2 shadow-card hover:text-ink"
               >
                 <X className="size-4" /> Close · Esc
               </button>

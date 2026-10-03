@@ -19,7 +19,7 @@ function LinkStatus() {
     : online === false ? 'Offline · AI stays local' : 'Online'
   return (
     <Pill
-      className="border border-line bg-surface text-[12px] uppercase tracking-[0.06em]"
+      className="border border-line bg-surface text-[13px] uppercase tracking-[0.06em]"
       tone="mute"
     >
       <span aria-hidden className={cx('size-2 rounded-full', live ? 'bg-clear' : 'bg-faint')} />
@@ -34,7 +34,7 @@ function Gb10() {
   const used = t?.mem_used_gb
   const mem = used == null ? DASH : t?.mem_total_gb != null ? `${num(used, 1)}/${num(t.mem_total_gb)} GB` : `${num(used, 1)} GB`
   return (
-    <div className="tnum flex items-center gap-3 font-mono text-[13px] text-mute">
+    <div className="tnum flex items-center gap-3 font-mono text-[14px] text-mute">
       <span className="font-semibold text-ink-2">GB10</span>
       <span>
         GPU <span className="text-ink">{t?.gpu_util == null ? DASH : `${num(t.gpu_util)}%`}</span>
@@ -51,7 +51,7 @@ function DataOut() {
   const n = useStore((s) => s.counters?.customer_data_out)
   return (
     <div className="flex items-center gap-2.5">
-      <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-mute">Customer data sent out</span>
+      <span className="font-mono text-[13px] uppercase tracking-[0.06em] text-mute">Customer data sent out</span>
       <span className={cx('tnum font-mono text-[18px] font-semibold', n == null ? 'text-mute' : n === 0 ? 'text-clear' : 'text-hold')}>
         {n == null ? DASH : num(n)}
       </span>
@@ -67,7 +67,7 @@ export function Header() {
           <Zap size={18} fill="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
         </span>
         <span className="font-brand text-[26px] leading-none text-ink">Fast and Fraudless</span>
-        <Pill className="ml-1 py-0.5 text-[11px] uppercase tracking-[0.08em] text-mute">Synthetic data</Pill>
+        <Pill className="ml-1 py-0.5 text-[12px] uppercase tracking-[0.08em] text-mute">Synthetic data</Pill>
       </div>
       <div className="flex items-center gap-5">
         <LinkStatus />

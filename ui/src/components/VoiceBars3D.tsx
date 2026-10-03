@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { getAnalyser } from '../lib/audio'
+import { watchPixelRatio } from './pixelRatio'
 import { usePrefersReducedMotion } from '../app/selectors'
 
 export type Bars3DTone = 'idle' | 'listening' | 'HOLD' | 'VERIFY' | 'NO_HOLD'
@@ -87,6 +88,7 @@ export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = fal
     }
     const resize = () => {
       // layout pixels (not getBoundingClientRect): a zoomed page must not shrink the canvas twice
+      renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
       const w = Math.max(1, el.clientWidth)
       const h = Math.max(1, el.clientHeight)
       renderer.setSize(w, h, false)
@@ -98,11 +100,13 @@ export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = fal
       const visibleW = 2 * DIST * Math.tan(((FOV / 2) * Math.PI) / 180) * camera.aspect
       span = visibleW * 0.86
       width = Math.min(0.32, (span / bars) * 0.5)
+      renderer.render(scene, camera)
     }
     resize()
     place(0)
     const ro = new ResizeObserver(resize)
     ro.observe(el)
+    const unwatch = watchPixelRatio(resize)
 
     let raf = 0
     let last = 0
@@ -154,6 +158,7 @@ export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = fal
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      unwatch()
       geo.dispose()
       mat.dispose()
       renderer.dispose()

@@ -41,8 +41,8 @@ export function ProofCard() {
           {num(out)}
         </span>
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[15px] text-ink">customer records sent out</span>
-          <span className="truncate text-[12px] text-mute">counted from the egress log on the box</span>
+          <span className="text-[16px] text-ink">customer records sent out</span>
+          <span className="truncate text-[13px] text-mute">counted from the egress log on the box</span>
         </div>
       </div>
 
@@ -68,9 +68,9 @@ function Stat({ value, label, aside }: { value: ReactNode; label: string; aside?
     <div className="flex min-w-0 flex-col gap-0.5">
       <span className="flex items-baseline gap-2">
         <span className="tnum font-mono text-[22px] font-medium leading-tight text-ink">{value}</span>
-        {aside && <span className="tnum truncate font-mono text-[12px] text-mute">{aside}</span>}
+        {aside && <span className="tnum truncate font-mono text-[13px] text-mute">{aside}</span>}
       </span>
-      <span className="truncate font-mono text-[11px] uppercase tracking-[0.06em] text-mute">{label}</span>
+      <span className="truncate font-mono text-[12px] uppercase tracking-[0.06em] text-mute">{label}</span>
     </div>
   )
 }
@@ -90,8 +90,8 @@ function LeakResult({ destLive }: { destLive?: { _k: number; dest?: string | nul
     key = `done-${destLive?._k ?? 'x'}-${denied}`
     body = denied ? (
       <span className="flex min-w-0 flex-col">
-        <span className="font-mono text-[13px] font-medium text-clear">DENIED by OpenShell policy</span>
-        {destLive?.dest && <span className="truncate font-mono text-[11px] text-mute">{destLive.dest}</span>}
+        <span className="font-mono text-[14px] font-medium text-clear">DENIED by OpenShell policy</span>
+        {destLive?.dest && <span className="truncate font-mono text-[12px] text-mute">{destLive.dest}</span>}
       </span>
     ) : (
       <span className="text-ink-2">Finished · no block reported yet</span>
@@ -112,7 +112,7 @@ function LeakResult({ destLive }: { destLive?: { _k: number; dest?: string | nul
   }
 
   return (
-    <div className="min-w-0 flex-1 text-[13px]" aria-live="polite">
+    <div className="min-w-0 flex-1 text-[14px]" aria-live="polite">
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={key}

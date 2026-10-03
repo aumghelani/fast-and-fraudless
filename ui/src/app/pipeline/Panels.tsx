@@ -1,17 +1,25 @@
-// The two indigo-bar panels of the hero: Rules & Checks, and the Decision.
+// Rules & Checks (each check rises in, a scan bar sweeps it and fills it green or red) and the Decision.
 import { useEffect, useRef, useState } from 'react'
 import { animate, motion } from 'motion/react'
 import { Check as CheckIcon } from 'lucide-react'
 import type { Call } from '../../lib/types'
 import { cx } from '../../lib/format'
-import { Card } from '../kit'
+import { Card, GlowCard } from '../kit'
 import { VERDICT_LABEL, usePrefersReducedMotion, verdictOf, type Verdict } from '../selectors'
 import type { Check, CheckTone } from './checks'
 
 const DOT: Record<CheckTone, string> = { flag: 'bg-hold', pass: 'bg-clear', info: 'bg-faint' }
+const FILL: Record<CheckTone, string> = { flag: 'bg-hold-soft', pass: 'bg-clear-soft', info: 'bg-surface-2' }
+const BAR: Record<CheckTone, string> = {
+  flag: 'bg-hold shadow-[0_0_14px_3px_rgb(229_72_77/0.55)]',
+  pass: 'bg-clear shadow-[0_0_14px_3px_rgb(23_163_90/0.5)]',
+  info: 'bg-mute shadow-[0_0_10px_2px_rgb(138_144_166/0.4)]',
+}
+const RISE_S = 0.35 // the check's box rises from the bottom
+const SCAN_S = 0.8 // then the scan bar sweeps left to right
 const EASE = [0.22, 1, 0.36, 1] as const
 
-/** Reveal checks one at a time (~220 ms) whenever the call or its verdict changes. */
+/** Reveal checks one at a time, each after the previous scan has mostly run. */
 function useReveal(key: string, total: number, reduced: boolean): number {
   const [state, setState] = useState({ key, n: 0 })
   const n = state.key === key ? state.n : 0
@@ -25,7 +33,7 @@ function useReveal(key: string, total: number, reduced: boolean): number {
       return
     }
     if (n >= total) return
-    const t = setTimeout(() => setState({ key, n: n + 1 }), n === 0 ? 120 : 220)
+    const t = setTimeout(() => setState({ key, n: n + 1 }), n === 0 ? 120 : 650)
     return () => clearTimeout(t)
   }, [key, n, total, reduced, state.key])
   return Math.min(n, total)
@@ -38,7 +46,6 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
   const shown = useReveal(key, checks.length, reduced)
   const flagged = checks.filter((c) => c.tone === 'flag').length
   const visible = checks.slice(0, shown)
-  const cur = shown - 1
   // keep the newest heard check in view when the list is taller than the panel
   const listRef = useRef<HTMLUListElement>(null)
   useEffect(() => {
@@ -57,35 +64,62 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
               <span className="ml-auto h-2.5 w-16 rounded-full bg-surface-2" />
             </div>
           ))}
-          <p className="mt-3 text-center font-mono text-[13px] text-mute">
+          <p className="mt-3 text-center font-mono text-[14px] text-mute">
             {!call ? 'Waiting for the next wire…' : call.ended ? 'Call ended before any words were heard' : 'Listening… checks appear as the customer speaks'}
           </p>
         </div>
       ) : (
         <div className="flex h-full flex-col">
-        <ul ref={listRef} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto [scrollbar-width:none]">
-          {visible.map((c, i) => (
+        <ul ref={listRef} className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pt-2 [mask-image:linear-gradient(to_bottom,transparent,#000_14px)] [scrollbar-width:none]">
+          {visible.map((c) => (
             <motion.li
               key={c.id}
-              initial={reduced ? false : { opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: EASE }}
-              className="relative flex h-[32px] shrink-0 items-center gap-3 rounded-lg px-3"
+              initial={reduced ? false : { opacity: 0, y: 22, scaleY: 0.6 }}
+              animate={{ opacity: 1, y: 0, scaleY: 1 }}
+              style={{ transformOrigin: 'bottom' }}
+              transition={{ duration: RISE_S, ease: EASE }}
+              className="relative flex h-[40px] shrink-0 items-center gap-3 overflow-hidden rounded-lg border border-line px-3"
             >
-              {i === cur && <Bracket reduced={reduced} tone={c.tone} />}
-              <span className={cx('relative size-2 shrink-0 rounded-full', DOT[c.tone])} />
-              <span className="relative shrink-0 font-mono text-[13.5px] text-ink">{c.label}</span>
-              {c.quote && (
-                <span className="relative min-w-0 truncate text-[13px] italic text-mute">“{c.quote}”</span>
+              {/* the tint that the scan bar leaves behind */}
+              <motion.span
+                aria-hidden
+                className={cx('absolute inset-y-0 left-0', FILL[c.tone])}
+                initial={reduced ? false : { width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: SCAN_S, ease: 'easeInOut', delay: RISE_S }}
+              />
+              {!reduced && (
+                <motion.span
+                  aria-hidden
+                  className={cx('absolute inset-y-1 w-[3px] rounded-full', BAR[c.tone])}
+                  initial={{ left: '0%', opacity: 1 }}
+                  animate={{ left: '100%', opacity: [1, 1, 0] }}
+                  transition={{ duration: SCAN_S, ease: 'easeInOut', delay: RISE_S, opacity: { duration: SCAN_S, times: [0, 0.85, 1], delay: RISE_S } }}
+                />
               )}
-              <span className={cx('relative ml-auto shrink-0 font-mono text-[13px] tnum',
-                c.tone === 'flag' ? 'text-hold' : c.tone === 'pass' ? 'text-clear' : 'text-mute')}>
+              <motion.span
+                className={cx('relative size-2.5 shrink-0 rounded-full', DOT[c.tone])}
+                initial={reduced ? false : { scale: 0.4, opacity: 0.4 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.25, delay: RISE_S + SCAN_S * 0.9 }}
+              />
+              <span className="relative shrink-0 font-mono text-[15px] text-ink">{c.label}</span>
+              {c.quote && (
+                <span className="relative min-w-0 truncate text-[14px] italic text-ink-2">“{c.quote}”</span>
+              )}
+              <motion.span
+                className={cx('relative ml-auto shrink-0 font-mono text-[14.5px] font-medium tnum',
+                  c.tone === 'flag' ? 'text-hold' : c.tone === 'pass' ? 'text-clear' : 'text-mute')}
+                initial={reduced ? false : { opacity: 0, x: 6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: RISE_S + SCAN_S * 0.85 }}
+              >
                 {c.value}
-              </span>
+              </motion.span>
             </motion.li>
           ))}
         </ul>
-        <div className="mt-2 flex shrink-0 items-center justify-between border-t border-line px-3 pt-3 font-mono text-[12px] text-mute">
+        <div className="mt-2 flex shrink-0 items-center justify-between border-t border-line px-3 pt-2.5 font-mono text-[13px] text-mute">
           <span className="flex items-center gap-2">
             <span className={cx('size-1.5 rounded-full', verdictOf(call) ? 'bg-clear' : call.ended ? 'bg-faint' : 'bg-accent')} />
             {verdictOf(call) ? 'All checks read' : call.ended ? 'Call ended' : 'Reading the call…'}
@@ -95,24 +129,6 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
         </div>
       )}
     </Card>
-  )
-}
-
-/** Thin corner bracket around the check being read, with a status dot. */
-function Bracket({ reduced, tone }: { reduced: boolean; tone: CheckTone }) {
-  const corner = 'absolute size-2.5 border-accent'
-  return (
-    <motion.span
-      layoutId="scan-bracket"
-      transition={reduced ? { duration: 0 } : { duration: 0.28, ease: EASE }}
-      className="pointer-events-none absolute inset-0 rounded-lg bg-accent-soft/60"
-    >
-      <span className={cx(corner, 'left-0 top-0 rounded-tl-md border-l border-t')} />
-      <span className={cx(corner, 'right-0 top-0 rounded-tr-md border-r border-t')} />
-      <span className={cx(corner, 'bottom-0 left-0 rounded-bl-md border-b border-l')} />
-      <span className={cx(corner, 'bottom-0 right-0 rounded-br-md border-b border-r')} />
-      <span className={cx('absolute -right-1 -top-1 size-2 rounded-full ring-2 ring-surface', DOT[tone] === 'bg-faint' ? 'bg-accent' : DOT[tone])} />
-    </motion.span>
   )
 }
 
@@ -152,42 +168,42 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
   const decided = call?.banker_decision ?? null
 
   const pos = risk ?? 0
+  const tone = verdict === 'HOLD' ? 'hold' : verdict === 'VERIFY' ? 'verify' : verdict === 'NO_HOLD' ? 'clear' : null
+  const ink = tone === 'hold' ? 'text-hold' : tone === 'verify' ? 'text-verify' : tone === 'clear' ? 'text-clear' : 'text-accent'
+  const fill = tone === 'hold' ? 'bg-hold' : tone === 'verify' ? 'bg-verify' : tone === 'clear' ? 'bg-clear' : 'bg-accent'
+  const knob = tone === 'hold' ? 'border-hold' : tone === 'verify' ? 'border-verify' : tone === 'clear' ? 'border-clear' : 'border-accent'
+  const bar = tone === 'hold' ? 'bg-hold-fill' : tone === 'verify' ? 'bg-verify' : tone === 'clear' ? 'bg-clear' : 'bg-accent'
   return (
-    <Card bar title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex flex-col px-6 pb-3 pt-4">
+    <GlowCard tone={tone} pulsing={!!call && !call.ended} className="h-full">
+    <Card bar barClass={bar} title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex flex-col px-6 pb-3 pt-4">
       <div className="flex items-baseline gap-2 font-mono">
-        <span className={cx('inline-block w-[2ch] text-right text-[56px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : 'text-accent')}>
+        <span className={cx('inline-block w-[2ch] text-right text-[56px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : ink, 'transition-colors duration-500')}>
           {risk == null ? '—' : <Ticker value={risk} reduced={reduced} />}
         </span>
-        <span className="text-[22px] text-mute">/100</span>
+        <span className="text-[24px] text-mute">/100</span>
       </div>
-      <p className="mt-2 font-mono text-[12px] text-mute">risk index from rule hits</p>
+      <p className="mt-2 font-mono text-[13px] text-mute">risk index from rule hits</p>
 
-      <div className="mt-5 flex gap-2">
+      <div className="mt-4 flex gap-2">
         {CHIPS.map(({ v, on }) => (
-          <span key={v} className={cx('rounded-full px-3.5 py-1 font-mono text-[13px] font-medium transition-colors duration-300',
+          <span key={v} className={cx('rounded-full px-4 py-1 font-mono text-[14px] font-medium transition-colors duration-300',
             verdict === v ? on : 'bg-surface-2 text-mute')}>
             {VERDICT_LABEL[v]}
           </span>
         ))}
       </div>
 
-      <div className="relative mt-6 h-5">
+      <div className="relative mt-5 h-5">
         <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-accent-soft" />
-        <motion.div className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-accent"
+        <motion.div className={cx('absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full transition-colors duration-500', fill)}
           initial={false} animate={{ width: `${pos}%` }}
           transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 120, damping: 20 }} />
         {[40, 70].map((t) => (
           <span key={t} className="absolute top-1/2 h-3 w-px -translate-y-1/2 bg-line-2" style={{ left: `${t}%` }} />
         ))}
-        <motion.span className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent bg-white shadow-[0_1px_4px_rgb(22_26_46/0.25)]"
+        <motion.span className={cx('absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white shadow-[0_1px_4px_rgb(22_26_46/0.25)] transition-colors duration-500', knob)}
           initial={false} animate={{ left: `${pos}%`, opacity: risk == null ? 0.4 : 1 }}
           transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 120, damping: 20 }} />
-      </div>
-      <div className="relative mt-1.5 h-4 font-mono text-[11px] text-faint tnum">
-        <span className="absolute left-0">0</span>
-        <span className="absolute -translate-x-1/2" style={{ left: '40%' }}>40</span>
-        <span className="absolute -translate-x-1/2" style={{ left: '70%' }}>70</span>
-        <span className="absolute right-0">100</span>
       </div>
 
 
@@ -205,5 +221,6 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
         ) : null}
       </div>
     </Card>
+    </GlowCard>
   )
 }

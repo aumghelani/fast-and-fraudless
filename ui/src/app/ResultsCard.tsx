@@ -54,12 +54,12 @@ export function ResultsCard() {
               i >= 3 ? 'border-t pt-3' : 'pb-3',
             )}
           >
-            <div className="truncate font-mono text-[10.5px] text-ink-2">{c.label}</div>
+            <div className="truncate font-mono text-[11.5px] text-ink-2">{c.label}</div>
             <div className="mt-auto flex items-baseline gap-1 whitespace-nowrap font-mono leading-none">
               <Roll value={c.value} digits={c.digits} suffix={c.suffix} className="text-[28px] font-semibold text-ink" />
-              {c.den !== undefined && <span className="tnum text-[13px] text-mute">/{num(c.den)}</span>}
+              {c.den !== undefined && <span className="tnum text-[14px] text-mute">/{num(c.den)}</span>}
             </div>
-            <div className="mt-2 min-h-4 truncate text-[11.5px] text-mute">{c.note ?? ''}</div>
+            <div className="mt-2 min-h-4 truncate text-[12.5px] text-mute">{c.note ?? ''}</div>
           </div>
         ))}
       </div>

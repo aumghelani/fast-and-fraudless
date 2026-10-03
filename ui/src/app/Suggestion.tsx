@@ -37,7 +37,7 @@ export function SuggestionBox() {
   const heardCues = Array.from(new Set((call?.cues ?? []).map((q) => String(q?.cue).toUpperCase()))).filter((k) => k !== 'AMOUNT_STATED')
   return (
     <section className="card flex h-full w-[440px] shrink-0 flex-col overflow-hidden px-5 py-4">
-      <header className="flex items-center gap-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-ink-2">
+      <header className="flex items-center gap-2 font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-ink-2">
         <Lightbulb className="size-4 text-accent" /> Suggestion
       </header>
       <AnimatePresence mode="wait" initial={false}>
@@ -69,7 +69,7 @@ export function SuggestionBox() {
                   {HEADLINE[v]}
                 </span>
               </div>
-              {call.reasons?.[0] && <p className="mt-1 line-clamp-1 text-[13.5px] leading-snug text-ink-2" title={call.reasons[0]}>{call.reasons[0]}</p>}
+              {call.reasons?.[0] && <p className="mt-1 line-clamp-1 text-[14.5px] leading-snug text-ink-2" title={call.reasons[0]}>{call.reasons[0]}</p>}
               {qs.length > 0 && (
                 <>
                   <ol aria-label="Ask the customer" className="mt-2.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
@@ -84,10 +84,10 @@ export function SuggestionBox() {
                         {/* click to tick a question off once it has been asked */}
                         <button
                           onClick={() => setAsked((m) => ({ ...m, [q]: !m[q] }))}
-                          className={cx('flex w-full gap-2.5 rounded-lg px-1.5 py-1 text-left text-[14px] leading-[1.35] transition-colors hover:bg-surface-2',
+                          className={cx('flex w-full gap-2.5 rounded-lg px-1.5 py-1 text-left text-[15px] leading-[1.35] transition-colors hover:bg-surface-2',
                             asked[q] ? 'text-mute line-through decoration-faint' : 'text-ink')}
                         >
-                          <span className={cx('mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border font-mono text-[11px]',
+                          <span className={cx('mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border font-mono text-[12px]',
                             asked[q] ? 'border-clear bg-clear text-white' : 'border-line-2 text-accent')}>
                             {asked[q] ? <Check className="size-3" strokeWidth={3} /> : i + 1}
                           </span>
@@ -111,7 +111,7 @@ export function SuggestionBox() {
                     </Button>
                   </>
                 )}
-                {err && <span className="text-[13px] text-hold">{err}</span>}
+                {err && <span className="text-[14px] text-hold">{err}</span>}
               </div>
             </>
           )}

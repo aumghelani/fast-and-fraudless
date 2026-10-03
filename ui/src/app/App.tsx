@@ -14,7 +14,6 @@ import { CallPanel } from './CallPanel'
 import { Pipeline } from './Pipeline'
 import { RingCard } from './RingCard'
 import { AgentCard } from './AgentCard'
-import { ProofCard } from './ProofCard'
 import { ResultsCard } from './ResultsCard'
 
 function useShortcuts(onEnter: () => void, onHome: () => void) {
@@ -98,7 +97,7 @@ function useAccordion(): [Open, (k: Exclude<Open, null>) => void] {
 function Desk() {
   const [open, toggle] = useAccordion()
   const vh = useViewportH()
-  const whyOpen = Math.round(clamp(vh * 0.42, 300, 470)) // rules and decision panels + label row
+  const whyOpen = Math.round(clamp(vh * 0.36, 280, 420)) // queue, proof and decision + label row
   const behindOpen = Math.round(clamp(vh * 0.34, 250, 340)) // metric cards + label row
   const rise = (i: number) => ({
     initial: { opacity: 0, y: 12 },
@@ -110,7 +109,7 @@ function Desk() {
       <motion.div {...rise(0)} className="min-h-0">
         <Header />
       </motion.div>
-      <motion.div {...rise(1)} className="flex min-h-[280px] min-w-0 gap-4">
+      <motion.div {...rise(1)} className="flex min-h-[320px] min-w-0 gap-4">
         <div className="min-w-0 flex-1">
           <CallPanel />
         </div>
@@ -123,15 +122,12 @@ function Desk() {
         </Section>
         <Section title="Behind the scenes" summary={<BehindSummary />} open={open === 'behind'} onToggle={() => toggle('behind')}
           height={open === 'behind' ? behindOpen : BAR_H}>
-          <div className="grid h-full min-h-0 grid-cols-4 gap-4">
+          <div className="grid h-full min-h-0 grid-cols-3 gap-4">
             <Expandable id="ring">
               <RingCard />
             </Expandable>
             <Expandable id="agent">
               <AgentCard />
-            </Expandable>
-            <Expandable id="proof">
-              <ProofCard />
             </Expandable>
             <Expandable id="results">
               <ResultsCard />

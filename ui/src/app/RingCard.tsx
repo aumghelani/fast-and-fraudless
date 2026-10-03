@@ -25,7 +25,7 @@ function Figure({ value, label }: { value: string; label: string }) {
   return (
     <div className="min-w-0">
       <div className="tnum font-mono text-[20px] font-semibold leading-none text-ink">{value}</div>
-      <div className="mt-1.5 font-mono text-[11px] text-mute">{label}</div>
+      <div className="mt-1.5 font-mono text-[12px] text-mute">{label}</div>
     </div>
   )
 }
@@ -62,14 +62,14 @@ export function RingCard() {
           <div className="tnum font-mono text-[34px] font-semibold leading-none tracking-tight text-ink">
             {scanned ? compact(scanned) : DASH}
           </div>
-          <div className="mt-2 text-[12.5px] text-mute">transactions scanned on the GB10</div>
+          <div className="mt-2 text-[13.5px] text-mute">transactions scanned on the GB10</div>
         </div>
         <Figure value={num(found)} label="rings found" />
         <Figure value={num(escalated)} label="escalated" />
       </div>
 
       <div className="relative mt-3 min-h-0 flex-1 border-t border-line pt-2">
-        <div className="absolute left-0 top-2 font-mono text-[10.5px] text-faint">
+        <div className="absolute left-0 top-2 font-mono text-[11.5px] text-faint">
           {inRing ? 'payee path' : newest ? 'newest escalated ring' : ''}
         </div>
         {inRing && call ? (
@@ -77,11 +77,11 @@ export function RingCard() {
         ) : newest ? (
           <RingShape ring={newest} />
         ) : (
-          <div className="grid h-full place-items-center font-mono text-[12px] text-faint">no ring yet</div>
+          <div className="grid h-full place-items-center font-mono text-[13px] text-faint">no ring yet</div>
         )}
       </div>
 
-      <div className="mt-1 truncate font-mono text-[12px] text-ink-2">
+      <div className="mt-1 truncate font-mono text-[13px] text-ink-2">
         {inRing ? (
           <>
             Payee feeds ring <span style={{ color: hubColor }}>{pc?.ring_id}</span>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { getAnalyser } from '../lib/audio'
+import { watchPixelRatio } from './pixelRatio'
 import { usePrefersReducedMotion } from '../app/selectors'
 
 export type RingTone = 'idle' | 'listening' | 'HOLD' | 'VERIFY' | 'NO_HOLD'
@@ -25,10 +26,12 @@ function cssColor(name: string, fallback: string) {
   return new THREE.Color(v || fallback)
 }
 
-export function VoiceRing3D({ active, tone = 'listening', bars = 120, className, children }: {
+export function VoiceRing3D({ active, tone = 'listening', bars = 120, tilt: tiltRad = TILT, className, children }: {
   active: boolean
   tone?: RingTone
   bars?: number
+  /** how far the ring lies back (radians): ~0.4 reads as a circle, ~1.3 as a wide oval */
+  tilt?: number
   className?: string
   children?: ReactNode
 }) {
@@ -54,7 +57,7 @@ export function VoiceRing3D({ active, tone = 'listening', bars = 120, className,
     scene.add(key)
 
     const tilt = new THREE.Group()
-    tilt.rotation.x = -TILT
+    tilt.rotation.x = -tiltRad
     scene.add(tilt)
     const group = new THREE.Group() // spins slowly inside the tilt
     tilt.add(group)
@@ -93,6 +96,7 @@ export function VoiceRing3D({ active, tone = 'listening', bars = 120, className,
 
     const resize = () => {
       // layout pixels (not getBoundingClientRect): a zoomed page must not shrink the canvas twice
+      renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
       const w = Math.max(1, el.clientWidth)
       const h = Math.max(1, el.clientHeight)
       renderer.setSize(w, h, false)
@@ -140,10 +144,12 @@ export function VoiceRing3D({ active, tone = 'listening', bars = 120, className,
       el.style.setProperty('--ring-in-w', `${Math.max(120, Math.round(inW))}px`)
       el.style.setProperty('--ring-in-h', `${Math.max(48, Math.round(Math.abs(inH)))}px`)
       el.style.setProperty('--ring-dy', `${Math.round((-midY * h) / 2)}px`)
+      renderer.render(scene, camera)
     }
     resize()
     const ro = new ResizeObserver(resize)
     ro.observe(el)
+    const unwatch = watchPixelRatio(resize)
 
     let raf = 0
     let last = 0
@@ -186,6 +192,7 @@ export function VoiceRing3D({ active, tone = 'listening', bars = 120, className,
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      unwatch()
       geo.dispose()
       mat.dispose()
       circle.geometry.dispose()
@@ -193,7 +200,7 @@ export function VoiceRing3D({ active, tone = 'listening', bars = 120, className,
       renderer.dispose()
       renderer.domElement.remove()
     }
-  }, [bars, reduced])
+  }, [bars, reduced, tiltRad])
 
   return (
     <div ref={host} className={className ?? 'relative h-80 w-full'}>
