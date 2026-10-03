@@ -1,9 +1,4 @@
-"""OpenShell egress proof: tail the sandbox log, parse ALLOWED/DENIED lines, publish + count.
-
-Line formats (STACK_GUIDE §12; parser adapted from Groundwork's openshell.mjs):
-  L4:  [epoch] [sandbox] [OCSF ] [ocsf] NET:OPEN [MED] DENIED /usr/bin/curl(114926) -> example.com:443 [policy:- engine:opa] [reason:...]
-  L7:  ... HTTP:POST [MED] DENIED POST http://api.github.com/user/repos [policy:github_api engine:opa]
-"""
+"""OpenShell egress proof: tail the sandbox log, parse ALLOWED/DENIED, count and publish."""
 from __future__ import annotations
 
 import re
