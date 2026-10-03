@@ -60,6 +60,8 @@ async def lifespan(app: FastAPI):
     worker_feed.start()
     egress.start()
     telemetry.start()
+    if integrations and hasattr(integrations, "start"):
+        integrations.start()
     if agent_bridge and hasattr(agent_bridge, "start") and os.environ.get("TW_AGENT_BRIDGE", "on") != "off":
         agent_bridge.start()
     elif agent_bridge:
