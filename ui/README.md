@@ -5,6 +5,15 @@ Proof → Results**. Built for 1920×1080 (also fine at 1440×900). React 19 + V
 3d-force-graph / three.js (the bank map), motion, lucide-react. Fonts are bundled (no CDN at runtime).
 The design spec is [FLOW_DESIGN.md](FLOW_DESIGN.md).
 
+## Look
+
+A calm racing theme: asphalt base `#0A0C0F`, carbon panels `#12151A` / `#171B21`, chrome text `#D7DCE3` and one
+nitro-blue accent `#19B5FE`. Red `#FF2D3D`, amber `#FFB000` and green `#22D37A` mean only HOLD, VERIFY and NO_HOLD
+(plus DENIED and OFFLINE). Racing Sans One (`font-race`) is for the wordmark and scene titles, Teko (`font-num`) for
+big numbers, rail steps and badges, and Inter for everything you read. Badges and rail steps are slanted decals
+(`.decal`, -8°). A scene change is one 320 ms speed-streak wipe; nothing else moves on its own except the map in
+Watching and the voice orb while audio plays. Reduced motion turns the wipe into a short crossfade.
+
 ## Run (dev, against the live box)
 
 ```bash
