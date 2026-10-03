@@ -11,6 +11,7 @@ from __future__ import annotations
 
 HIGH_RISK = ("URGENCY", "SECRECY", "AUTHORITY", "STORY_CHANGE", "COACHING", "REMOTE_CONTROL")
 LOW_RISK = ("VERIFIED_INDEPENDENTLY", "ROUTINE_PAYEE", "AMOUNT_STATED")
+TRUST = ("VERIFIED_INDEPENDENTLY", "ROUTINE_PAYEE")   # reassuring claims: scammers coach these
 ALL_CUES = HIGH_RISK + LOW_RISK
 
 RATIO_HOLD = 5.0          # amount / typical monthly outflow
@@ -114,7 +115,10 @@ def decide(cues: list[dict], customer: dict, amount: float | None, payee_check: 
         if name == "AMOUNT_STATED":
             continue
         q = first_quote[name]
-        reasons.append(f"{CUE_TEXT[name]}: “{q}”" if q else CUE_TEXT[name])
+        line = f"{CUE_TEXT[name]}: “{q}”" if q else CUE_TEXT[name]
+        if rec == "HOLD" and name in TRUST:
+            line += " (a claim; it does not lower the hold)"
+        reasons.append(line)
     if rec == "NO_HOLD" and not reasons:
         reasons.append("No scam cues, payee not linked to any ring")
     elif rec == "NO_HOLD":
