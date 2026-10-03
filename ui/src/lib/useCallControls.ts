@@ -154,7 +154,9 @@ export function useCallControls() {
       let mine: MediaStream | null = null
       try {
         await resumeAudio()
-        mine = await phoneMic()
+        // no microphone on this computer: still answer, the banker hears the caller (one way)
+        mine = await phoneMic().catch(() => new MediaStream())
+        if (!mine.getAudioTracks().length) setError('No microphone here: you can hear the caller, but they cannot hear you')
         pc = newPeer()
         mine.getTracks().forEach((t) => pc!.addTrack(t, mine!))
         const theirs = new Promise<MediaStream>((res) => {
