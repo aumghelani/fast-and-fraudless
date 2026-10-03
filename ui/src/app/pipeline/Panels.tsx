@@ -191,6 +191,14 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
             {VERDICT_LABEL[v]}
           </span>
         ))}
+        {/* what the banker chose (they act from the suggestion box) */}
+        {decided && (
+          <span className={cx('ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[13.5px]',
+            decided === 'hold' ? 'bg-hold-soft text-hold' : 'bg-clear-soft text-clear')}>
+            <CheckIcon size={14} strokeWidth={2.5} />
+            {decided === 'hold' ? 'Held by banker' : 'Released'}
+          </span>
+        )}
       </div>
 
       <div className="relative mt-5 h-5">
@@ -207,19 +215,6 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
       </div>
 
 
-      {/* the banker acts from the suggestion box; this only reports what they chose */}
-      <div className="mt-auto flex h-8 shrink-0 items-center gap-2 font-mono text-[13px] text-mute">
-        {decided ? (
-          <span className="inline-flex items-center gap-2 text-ink">
-            <span className={cx('grid size-6 place-items-center rounded-full', decided === 'hold' ? 'bg-hold-soft text-hold' : 'bg-clear-soft text-clear')}>
-              <CheckIcon size={14} strokeWidth={2.5} />
-            </span>
-            {decided === 'hold' ? 'Held by the banker' : 'Released by the banker'}
-          </span>
-        ) : verdict ? (
-          'The banker decides · see Suggestion'
-        ) : null}
-      </div>
     </Card>
     </GlowCard>
   )
