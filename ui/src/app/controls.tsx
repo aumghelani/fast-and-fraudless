@@ -9,10 +9,10 @@ export type Ctl = Omit<CallControls, 'level'>
 const CtlContext = createContext<Ctl | null>(null)
 
 export function CallControlsProvider({ children }: { children: ReactNode }) {
-  const { mode, error, micMode, replay, startMicCall, toggleMic, end, audioEl } = useCallControls()
+  const { mode, error, micMode, replay, startMicCall, toggleMic, end, answerPhone, audioEl } = useCallControls()
   const value = useMemo<Ctl>(
-    () => ({ mode, error, micMode, replay, startMicCall, toggleMic, end, audioEl }),
-    [mode, error, micMode, replay, startMicCall, toggleMic, end, audioEl],
+    () => ({ mode, error, micMode, replay, startMicCall, toggleMic, end, answerPhone, audioEl }),
+    [mode, error, micMode, replay, startMicCall, toggleMic, end, answerPhone, audioEl],
   )
   return <CtlContext.Provider value={value}>{children}</CtlContext.Provider>
 }

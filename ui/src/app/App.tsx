@@ -8,6 +8,7 @@ import { BAR_H, EASE, Expandable, Section } from './interact'
 import { useActiveCall, useShownSar, verdictOf, VERDICT_LABEL } from './selectors'
 import { CallControlsProvider, runExfil, useCtl } from './controls'
 import { Landing } from './Landing'
+import { IncomingCall } from './IncomingCall'
 import { SuggestionBox } from './Suggestion'
 import { Header } from './Header'
 import { CallPanel } from './CallPanel'
@@ -163,6 +164,8 @@ function Shell() {
     if (ctl.mode !== 'idle') setEntered(true)
   }, [ctl.mode])
   return (
+    <>
+    <IncomingCall />
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={entered ? 'desk' : 'landing'}
@@ -175,6 +178,7 @@ function Shell() {
         {entered ? <Desk /> : <Landing onEnter={enter} />}
       </motion.div>
     </AnimatePresence>
+    </>
   )
 }
 

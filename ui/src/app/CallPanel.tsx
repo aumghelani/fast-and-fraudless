@@ -33,6 +33,7 @@ function KbdOn({ children }: { children: ReactNode }) {
 }
 
 function sourceOf(c: Call | undefined, mode: string): string {
+  if (c?.label?.startsWith('In-app call')) return 'In-app call'
   const s = c?.source ?? (mode === 'mic' ? 'mic' : 'replay')
   return s === 'mic' ? 'Microphone' : 'Replay'
 }

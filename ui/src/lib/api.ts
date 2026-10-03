@@ -21,7 +21,8 @@ async function post<T = any>(path: string, body?: unknown, raw?: BodyInit): Prom
 }
 
 export const api = {
-  startCall: (scenario?: string) => post<{ call_id: string }>('/api/calls/start', scenario ? { scenario } : {}),
+  startCall: (scenario?: string, name?: string) =>
+    post<{ call_id: string }>('/api/calls/start', { ...(scenario ? { scenario } : {}), ...(name ? { name } : {}) }),
   sendAudio: (id: string, pcm: Float32Array) => {
     // raw little-endian float32 (every browser we target is little-endian; enforce anyway)
     const buf = new ArrayBuffer(pcm.length * 4)

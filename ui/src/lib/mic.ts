@@ -67,16 +67,24 @@ export interface MicHandle {
   mode: 'worklet' | 'script-processor'
 }
 
-export async function startMic(opts: {
+export interface StreamOpts {
   onChunk: (pcm: Float32Array) => void
   onLevel: (rms: number) => void
-}): Promise<MicHandle> {
+}
+
+export async function startMic(opts: StreamOpts): Promise<MicHandle> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('Microphone needs a secure context (open the UI on localhost or https)')
   }
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   })
+  return startStream(stream, opts, true)
+}
+
+/** Any audio stream (the laptop mic, or the caller's voice on an in-app call) -> the same 16 kHz chunks.
+ *  `owned`: stop the stream's tracks when done (true for our own mic, false for a remote caller). */
+export async function startStream(stream: MediaStream, opts: StreamOpts, owned: boolean): Promise<MicHandle> {
   const ctx = audioCtx()
   if (ctx.state === 'suspended') await ctx.resume()
   const src = ctx.createMediaStreamSource(stream)
@@ -165,7 +173,7 @@ export async function startMic(opts: {
       } catch {
         /* already gone */
       }
-      stream.getTracks().forEach((t) => t.stop())
+      if (owned) stream.getTracks().forEach((t) => t.stop())
       opts.onLevel(0)
     },
   }
