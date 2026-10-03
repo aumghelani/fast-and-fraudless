@@ -120,3 +120,41 @@ def test_deterministic():
     a = decide(CASES[2][4], GENERIC, 12000, CLEAN)
     b = decide(CASES[2][4], GENERIC, 12000, CLEAN)
     assert a == b
+
+
+# ---- perception feeding the rules: keyword fallback on the reference transcripts, quote checking, JSON parsing
+from pathlib import Path
+
+from backend.cues import extract_cues_keywords, parse_amount, validate
+from backend.llm import LLMError, extract_json
+
+_REF = Path(__file__).resolve().parents[2] / "data" / "demo-audio" / "parakeet_cpu_transcripts.txt"
+_EXPECT = {c[0]: c[5] for c in CASES}
+
+
+@pytest.mark.skipif(not _REF.exists(), reason="reference transcripts not present")
+def test_keyword_fallback_on_reference_transcripts():
+    for line in _REF.read_text(encoding="utf-8").splitlines():
+        if "|" not in line:
+            continue
+        name, text = line.split("|", 1)
+        cid = name.strip()[:7]
+        cust = {"CALL-01": MARGARET, "CALL-02": DAVID}.get(cid, GENERIC)
+        cues = extract_cues_keywords(text.strip())
+        rec = decide(cues, cust, parse_amount(text), CLEAN)["recommendation"]
+        assert (rec == "HOLD") == (_EXPECT[cid] == "HOLD"), (cid, cues, rec)
+
+
+def test_validate_drops_invented_quotes():
+    t = "Please send it today. It is for my grandson."
+    out = validate(t, [{"cue": "URGENCY", "quote": "send it TODAY"},
+                       {"cue": "SECRECY", "quote": "don't tell anyone"},
+                       {"cue": "NOT_A_CUE", "quote": "today"}])
+    assert out == [{"cue": "URGENCY", "quote": "send it today"}]
+
+
+def test_extract_json():
+    assert extract_json('<think>x</think>Sure: {"cues": [{"cue": "URGENCY", "quote": "a {b}"}]} done') == \
+        {"cues": [{"cue": "URGENCY", "quote": "a {b}"}]}
+    with pytest.raises(LLMError):
+        extract_json("no json here")
