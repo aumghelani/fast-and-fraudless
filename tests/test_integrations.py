@@ -423,3 +423,120 @@ def test_start_without_urls_or_secret_is_a_noop(monkeypatch, fake):
     monkeypatch.setenv("TW_WEBHOOKS", HOOK)
     integ.start()
     assert integ._state["hooks"] is None and "TW_WEBHOOK_SECRET" in integ._state["note"]   # never unsigned
+
+
+# ---------------------------------------------------------------- SAR draft (FinCEN-style) + case CSV
+import xml.etree.ElementTree as ET  # noqa: E402
+
+EDGES = [
+    {"txn_id": "T100", "src": "802225A40", "dst": "8041F18B0", "amount": 5547.92, "currency": "US Dollar",
+     "usd": 5547.92, "ts": "2022-09-03T12:16:00"},
+    {"txn_id": "T101", "src": "800E21640", "dst": "8041F18B0", "amount": 9211.89, "currency": "Euro",
+     "usd": 10040.96, "ts": "2022-09-04T04:57:00"},
+    {"txn_id": "T102", "src": "8007E16E0", "dst": "8041F18B0", "amount": 11218.97, "currency": "US Dollar",
+     "usd": 11218.97, "ts": "2022-09-02T15:18:00"},
+]
+SAR_RING = {**RING, "edges": EDGES, "n_txns": 3, "total_usd": 26807.85}
+SAR = {"_id": "SAR-R-102", "ring_id": "R-102", "revision": 2, "author": "agent", "valid_all": False,
+       "received_at": "2026-10-03T13:00:00+00:00", "decision": None,
+       "narrative": 'Hub 8041F18B0 <b>&</b> "funnel" \x01 T100 ($5,547.92), T101, T555 ($9,999.00), T900.',
+       "citations": [{"txn_id": "T100", "amount": 5547.92, "valid": True},
+                     {"txn_id": "T101", "amount": None, "valid": True},
+                     {"txn_id": "T555", "amount": 9999.0, "valid": False, "reason": "transaction id does not exist"},
+                     {"txn_id": "T900", "amount": None, "valid": False, "reason": "belongs to ring R-007"},
+                     {"txn_id": None, "amount": 26807.85, "valid": True, "reason": "matches ring total (USD)"}]}
+
+
+def test_sar_report_uses_only_validated_citations():
+    rep = integ.build_sar_report(SAR, SAR_RING, {}, "First Harbor Bank")
+    sa = rep["suspicious_activity"]
+    assert [t["txn_id"] for t in sa["transactions"]] == ["T100", "T101"]          # T102 not cited, T555/T900 invalid
+    assert (sa["date_from"], sa["date_to"], sa["total_usd"]) == ("2022-09-03", "2022-09-04", 15588.88)
+    assert [s["account_id"] for s in rep["subjects"]] == ["802225A40", "8041F18B0", "800E21640"]
+    assert rep["subjects"][1]["role"] == "hub" and "funnel account" in sa["category"]
+    assert (rep["status"], rep["filed"], rep["analyst_decision"]) == ("DRAFT", False, "pending")
+    assert rep["validation"] == {"citations_total": 5, "citations_verified": 3, "unverified_excluded": 2,
+                                 "valid_all": False}
+    assert rep["filing_institution"]["name"] == "First Harbor Bank" and rep["data_label"].startswith("SYNTHETIC")
+
+
+def test_sar_xml_is_well_formed_and_marked_draft():
+    raw = integ.sar_xml(integ.build_sar_report(SAR, SAR_RING, {}, "Your Bank"))
+    assert raw.startswith(b"<?xml") and b"DRAFT - NOT FILED" in raw
+    root = ET.fromstring(raw)
+    assert root.tag == "SuspiciousActivityReportDraft" and root.get("status") == "DRAFT" and root.get("filed") == "false"
+    txs = root.find("SuspiciousActivity/Transactions")
+    assert [t.get("txnId") for t in txs] == ["T100", "T101"] and txs.get("count") == "2"
+    assert txs[1].get("amount") == "9211.89" and txs[1].get("amountUSD") == "10040.96"
+    assert {t.get("txnId") for t in root.iter("Transaction")}.isdisjoint({"T555", "T900", "T102"})
+    assert root.find("SuspiciousActivity/TotalAmount").text == "15588.88"
+    assert root.find("CitationValidation").get("excludedUnverified") == "2"
+    assert root.find("Narrative").text.startswith('Hub 8041F18B0 <b>&</b> "funnel"  T100')   # escaped, control char dropped
+    assert "NOT FILED" in root.find("Disclaimer").text
+
+
+def test_case_rows_and_csv():
+    cases = [{"_id": "R-102", "status": "sar_drafted", "timeline": [{"ts": 1791046004695, "msg": "woke"},
+                                                                    {"ts": 1791046017661, "msg": "SAR"}]}]
+    sars = [{**SAR, "decision": "approved", "decided_at": "2026-10-03T13:05:00+00:00"}]
+    rings = {"R-102": {**SAR_RING, "accounts": ["=HYPERLINK(1)", "802225A40"]},
+             "R-200": {"_id": "R-200", "tier": "escalate", "type": "FAN-OUT", "accounts": ["a"]}}
+    rows = integ.case_rows(cases, sars, rings, include_escalated=True)
+    assert [r["ring_id"] for r in rows] == ["R-102", "R-200"]
+    assert (rows[0]["sar_status"], rows[0]["citations_verified"], rows[1]["case_status"]) == ("approved", 3, "not_started")
+    text = integ.to_csv(rows)
+    lines = text.split("\r\n")
+    assert lines[0].split(",") == list(integ.CASE_COLUMNS)
+    assert lines[0] == ("ring_id,ring_type,tier,case_status,total_usd,n_transactions,n_accounts,hub,accounts,sar_id,"
+                        "sar_status,sar_valid_all,citations_verified,citations_total,analyst_decision,decided_at,"
+                        "ring_found_at,case_first_event_at,case_last_event_at,sar_received_at")
+    assert "'=HYPERLINK(1);802225A40" in text and "2026-" in lines[1]
+
+
+# ---------------------------------------------------------------- HTTP routes (FastAPI TestClient, fake Mongo)
+@pytest.fixture
+def client(fake, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    fake.rings.docs["R-102"] = SAR_RING
+    fake.sar_drafts = FakeColl([SAR])
+    fake.cases = FakeColl([{"_id": "R-102", "status": "sar_drafted", "timeline": [{"ts": 1791046004695, "msg": "x"}]}])
+    audits = []
+    monkeypatch.setattr(integ, "audit", lambda *a, **k: audits.append((a, k)))
+    monkeypatch.delenv("TW_INTEGRATIONS_TOKEN", raising=False)
+    app = FastAPI()
+    app.include_router(integ.router)
+    c = TestClient(app)
+    c.audits = audits
+    return c
+
+
+def test_routes_end_to_end(client):
+    r = client.post("/api/integrations/iso20022/pacs008", content=sample("pacs008_margaret.xml"),
+                    headers={"Content-Type": "application/xml"})
+    assert r.status_code == 200 and r.json()["screening"] == "RING_MATCH" and r.json()["hold_recommended"] is True
+    r = client.post("/api/integrations/iso20022/pain001", content=sample("pain001_example.xml"))
+    assert r.status_code == 200 and [t["screening"] for t in r.json()["transactions"]] == ["CLEAR", "RING_MATCH"]
+    assert client.post("/api/integrations/iso20022/pacs008", content=b"<oops").status_code == 400
+    r = client.post("/api/integrations/transactions?dry_run=true", content=IBM_CSV, headers={"Content-Type": "text/csv"})
+    assert r.status_code == 200 and (r.json()["accepted"], r.json()["rejected"], r.json()["dry_run"]) == (3, 2, True)
+    r = client.get("/api/integrations/sar/SAR-R-102.json")
+    assert r.status_code == 200 and r.json()["status"] == "DRAFT" and r.headers["cache-control"] == "no-store"
+    r = client.get("/api/integrations/sar/SAR-R-102/fincen.xml")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/xml")
+    assert ET.fromstring(r.content).get("sarId") == "SAR-R-102"
+    assert [a[1]["format"] for a in client.audits] == ["json", "xml"]
+    assert client.get("/api/integrations/sar/SAR-R-999.json").status_code == 404
+    assert client.get("/api/integrations/sar/bad$id/fincen.xml").status_code == 400
+    r = client.get("/api/integrations/cases/export.csv")
+    assert r.status_code == 200 and r.text.startswith("ring_id,ring_type,tier,case_status,total_usd")
+    assert "attachment" in r.headers["content-disposition"]
+    assert client.get("/api/integrations/branding").json()["product_name"] == "Fast and Fraudless"
+
+
+def test_routes_token(client, monkeypatch):
+    monkeypatch.setenv("TW_INTEGRATIONS_TOKEN", "t0ken")
+    assert client.get("/api/integrations/cases/export.csv").status_code == 401
+    assert client.get("/api/integrations/cases/export.csv", headers={"Authorization": "Bearer t0ken"}).status_code == 200
+    assert client.get("/api/integrations/sar/SAR-R-102.json", headers={"X-API-Key": "t0ken"}).status_code == 200
+    assert client.get("/api/integrations/branding").status_code == 200   # the UI reads branding without a token

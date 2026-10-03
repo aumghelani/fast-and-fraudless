@@ -26,11 +26,11 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from .bus import bus
-from .db import db, load_token, now, save_token
+from .db import audit, db, load_token, now, save_token
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 
@@ -820,6 +820,232 @@ def _watch(hooks: Webhooks) -> None:
             else:
                 _log(f"change stream error, retrying in 3 s: {msg[:200]}")
             time.sleep(3)
+
+
+# ---------------------------------------------------------------- SAR draft export (FinCEN BSA SAR-style)
+SAR_FORMAT = "FinCEN BSA SAR-style draft (sections follow the SAR form; not the FinCEN e-filing schema)"
+SAR_DISCLAIMER = ("DRAFT for analyst review. NOT FILED with FinCEN. SAR confidentiality applies (31 CFR 1020.320(e)): "
+                  "do not disclose that this report exists.")
+SAR_CATEGORY = {"FAN-IN": "Money laundering: funnel account (suggested; the analyst confirms)",
+                "FAN-OUT": "Money laundering: suspicious use of multiple accounts (suggested; the analyst confirms)"}
+_XML_BAD = re.compile("[^\u0009\u000a\u000d -퟿-�\U00010000-\U0010ffff]")
+
+
+def build_sar_report(sar: dict, ring: dict, txn_docs: dict, bank_name: str) -> dict:
+    """SAR-style draft. Structured parts use only citations the validator verified against Mongo."""
+    edges = {e.get("txn_id"): e for e in ring.get("edges") or [] if e.get("txn_id")}
+    cits = sar.get("citations") or []
+    ids = list(dict.fromkeys(c["txn_id"] for c in cits if c.get("valid") and c.get("txn_id")))
+    txns = []
+    for tid in ids:
+        e = edges.get(tid) or txn_docs.get(tid)
+        if e:
+            txns.append({"txn_id": tid, "ts": _iso(e.get("ts")), "from_account": e.get("src"),
+                         "to_account": e.get("dst"), "amount": e.get("amount"), "currency": e.get("currency"),
+                         "usd": e.get("usd")})
+    txns.sort(key=lambda t: t["ts"] or "")
+    subjects: list = []
+    for t in txns:
+        for a in (t["from_account"], t["to_account"]):
+            if a and all(s["account_id"] != a for s in subjects):
+                subjects.append({"account_id": a, "role": "hub" if a == ring.get("hub") else "counterparty"})
+    usd = [float(t["usd"]) for t in txns if t["usd"] is not None]
+    dates = [t["ts"][:10] for t in txns if t["ts"]]
+    verified = sum(1 for c in cits if c.get("valid"))
+    return {
+        "status": "DRAFT", "filed": False, "disclaimer": SAR_DISCLAIMER, "format": SAR_FORMAT,
+        "data_label": DATA_LABEL, "generated_at": now().isoformat(),
+        "sar_id": sar.get("_id"), "revision": sar.get("revision"), "ring_id": sar.get("ring_id"),
+        "author": sar.get("author"), "received_at": _iso(sar.get("received_at")),
+        "analyst_decision": sar.get("decision") or "pending", "decided_by": sar.get("decided_by"),
+        "decided_at": _iso(sar.get("decided_at")),
+        "filing_institution": {"name": bank_name},
+        "subjects": subjects,
+        "suspicious_activity": {"date_from": min(dates) if dates else None, "date_to": max(dates) if dates else None,
+                                "total_usd": round(sum(usd), 2) if usd else None, "transaction_count": len(txns),
+                                "pattern": ring.get("type"), "category": SAR_CATEGORY.get(ring.get("type")),
+                                "transactions": txns},
+        "ring_context": {"ring_id": ring.get("_id"), "type": ring.get("type"), "hub": ring.get("hub"),
+                         "tier": ring.get("tier"), "n_accounts": len(ring.get("accounts") or []),
+                         "n_transactions": ring.get("n_txns") or len(edges), "total_usd": ring.get("total_usd"),
+                         "found_at": _iso(ring.get("found_at"))},
+        "validation": {"citations_total": len(cits), "citations_verified": verified,
+                       "unverified_excluded": len(cits) - verified, "valid_all": bool(sar.get("valid_all"))},
+        "narrative": sar.get("narrative") or "",
+    }
+
+
+def _x(v) -> str:
+    """Text safe for XML 1.0 (ElementTree escapes markup; this drops illegal control characters)."""
+    return _XML_BAD.sub("", "" if v is None else str(v))
+
+
+def _money_txt(v) -> Optional[str]:
+    if v is None:
+        return None
+    x = float(v)
+    return f"{x:.2f}" if x == 0 or x >= 0.01 else f"{x:.8f}".rstrip("0")   # keep tiny crypto amounts
+
+
+def sar_xml(rep: dict) -> bytes:
+    """Well-formed XML for a SAR-style draft (ElementTree escapes all text)."""
+    def sub(parent, tag, text=None, **attrs):
+        el = ET.SubElement(parent, tag, {k: _x(v) for k, v in attrs.items() if v is not None})
+        if text is not None:
+            el.text = _x(text)
+        return el
+
+    root = ET.Element("SuspiciousActivityReportDraft", {"status": "DRAFT", "filed": "false", "sarId": _x(rep["sar_id"])})
+    root.append(ET.Comment(" DRAFT - NOT FILED. Prepared for analyst review; never submitted to FinCEN by this system. "))
+    sub(root, "Disclaimer", rep["disclaimer"])
+    hdr = sub(root, "DraftHeader")
+    for tag, key in (("Format", "format"), ("DataLabel", "data_label"), ("GeneratedAt", "generated_at"),
+                     ("Revision", "revision"), ("RingId", "ring_id"), ("Author", "author"),
+                     ("ReceivedAt", "received_at"), ("AnalystDecision", "analyst_decision"),
+                     ("DecidedBy", "decided_by"), ("DecidedAt", "decided_at")):
+        if rep.get(key) is not None:
+            sub(hdr, tag, rep[key])
+    sub(sub(root, "FilingInstitution", section="Part IV"), "Name", rep["filing_institution"]["name"])
+    subj = sub(root, "Subjects", section="Part I", count=len(rep["subjects"]))
+    for s in rep["subjects"]:
+        sub(sub(subj, "Subject", role=s["role"]), "AccountId", s["account_id"])
+    sa = rep["suspicious_activity"]
+    act = sub(root, "SuspiciousActivity", section="Part II")
+    for tag, key in (("DateFrom", "date_from"), ("DateTo", "date_to"), ("Pattern", "pattern"), ("Category", "category")):
+        if sa.get(key) is not None:
+            sub(act, tag, sa[key])
+    if sa["total_usd"] is not None:
+        sub(act, "TotalAmount", _money_txt(sa["total_usd"]), currency="USD")
+    txs = sub(act, "Transactions", count=sa["transaction_count"], basis="validated citations only")
+    for t in sa["transactions"]:
+        sub(txs, "Transaction", txnId=t["txn_id"], timestamp=t["ts"], fromAccount=t["from_account"],
+            toAccount=t["to_account"], amount=_money_txt(t["amount"]), currency=t["currency"],
+            amountUSD=_money_txt(t["usd"]))
+    rc = rep["ring_context"]
+    sub(root, "RingContext", source="GPU ring finder", ringId=rc["ring_id"], type=rc["type"], hub=rc["hub"],
+        tier=rc["tier"], accounts=rc["n_accounts"], transactions=rc["n_transactions"],
+        totalUSD=_money_txt(rc["total_usd"]), foundAt=rc["found_at"])
+    v = rep["validation"]
+    sub(root, "CitationValidation", total=v["citations_total"], verified=v["citations_verified"],
+        excludedUnverified=v["unverified_excluded"], allValid=str(v["valid_all"]).lower())
+    sub(root, "Narrative", rep["narrative"], section="Part V")
+    ET.indent(root)
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def sar_report(sar_id: str) -> Optional[dict]:
+    d = db()
+    sar = d.sar_drafts.find_one({"_id": sar_id})
+    if not sar:
+        return None
+    ring = d.rings.find_one({"_id": sar.get("ring_id")}) or {}
+    have = {e.get("txn_id") for e in ring.get("edges") or []}
+    missing = [c["txn_id"] for c in sar.get("citations") or []
+               if c.get("valid") and c.get("txn_id") and c["txn_id"] not in have]
+    docs = {t["_id"]: t for t in d.transactions.find({"_id": {"$in": missing}})} if missing else {}
+    return build_sar_report(sar, ring, docs, branding()["bank_name"])
+
+
+def _sar_or_error(sar_id: str, fmt: str) -> dict:
+    if not ID_RE.match(sar_id):
+        raise HTTPException(400, "malformed sar_id")
+    try:
+        rep = sar_report(sar_id)
+    except PyMongoError as e:
+        raise HTTPException(503, f"database unavailable ({type(e).__name__})") from None
+    if rep is None:
+        raise HTTPException(404, f"unknown SAR {sar_id}")
+    try:   # SAR access is part of the audit trail
+        audit("integration", "sar_draft_exported", sar_id=sar_id, format=fmt)
+    except Exception as e:  # noqa: BLE001
+        _log(f"audit of SAR export failed: {type(e).__name__}")
+    return rep
+
+
+NO_STORE = {"Cache-Control": "no-store"}
+
+
+@router.get("/sar/{sar_id}/fincen.xml", dependencies=AUTH, summary="SAR draft as FinCEN-style XML (DRAFT, not filed)")
+def sar_fincen_xml(sar_id: str):
+    rep = _sar_or_error(sar_id, "xml")
+    return Response(sar_xml(rep), media_type="application/xml",
+                    headers={**NO_STORE, "Content-Disposition": f'inline; filename="{sar_id}-DRAFT.xml"'})
+
+
+@router.get("/sar/{sar_id}.json", dependencies=AUTH, summary="SAR draft as JSON (same content as the XML)")
+def sar_json(sar_id: str):
+    return JSONResponse(json.loads(json.dumps(_sar_or_error(sar_id, "json"), default=str)), headers=NO_STORE)
+
+
+# ---------------------------------------------------------------- case-management export
+CASE_COLUMNS = ("ring_id", "ring_type", "tier", "case_status", "total_usd", "n_transactions", "n_accounts", "hub",
+                "accounts", "sar_id", "sar_status", "sar_valid_all", "citations_verified", "citations_total",
+                "analyst_decision", "decided_at", "ring_found_at", "case_first_event_at", "case_last_event_at",
+                "sar_received_at")
+
+
+def case_rows(cases: list, sars: list, rings: dict, include_escalated: bool = False) -> list:
+    """One row per case (ring), joined with its ring and SAR draft."""
+    case_by, sar_by = {c["_id"]: c for c in cases}, {s.get("ring_id"): s for s in sars if s.get("ring_id")}
+    ids = list(dict.fromkeys(list(case_by) + list(sar_by)))
+    if include_escalated:
+        ids += [rid for rid, r in rings.items() if r.get("tier") == "escalate" and rid not in case_by and rid not in sar_by]
+    rows = []
+    for rid in ids:
+        c, s, r = case_by.get(rid) or {}, sar_by.get(rid) or {}, rings.get(rid) or {}
+        tl, cits = c.get("timeline") or [], s.get("citations") or []
+        rows.append({
+            "ring_id": rid, "ring_type": r.get("type"), "tier": r.get("tier"),
+            "case_status": c.get("status") or ("sar_drafted" if s else "not_started"),
+            "total_usd": r.get("total_usd"), "n_transactions": r.get("n_txns"),
+            "n_accounts": len(r.get("accounts") or []) or None, "hub": r.get("hub"),
+            "accounts": ";".join(r.get("accounts") or []),
+            "sar_id": s.get("_id"), "sar_status": (s.get("decision") or "drafted") if s else "none",
+            "sar_valid_all": s.get("valid_all") if s else None,
+            "citations_verified": sum(1 for x in cits if x.get("valid")) if s else None,
+            "citations_total": len(cits) if s else None,
+            "analyst_decision": s.get("decision"), "decided_at": _iso(s.get("decided_at")),
+            "ring_found_at": _iso(r.get("found_at")),
+            "case_first_event_at": _iso(tl[0].get("ts")) if tl else None,
+            "case_last_event_at": _iso(tl[-1].get("ts")) if tl else None,
+            "sar_received_at": _iso(s.get("received_at"))})
+    return rows
+
+
+def _cell(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    s = str(v)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s   # no spreadsheet formulas
+
+
+def to_csv(rows: list, columns=CASE_COLUMNS) -> str:
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\r\n")
+    w.writerow(columns)
+    for r in rows:
+        w.writerow([_cell(r.get(k)) for k in columns])
+    return buf.getvalue()
+
+
+@router.get("/cases/export.csv", dependencies=AUTH,
+            summary="Case-management export (scope=cases, or scope=escalated to add escalated rings without a case)")
+def cases_export(scope: str = "cases"):
+    try:
+        d = db()
+        cases = list(d.cases.find({}, {"status": 1, "timeline": 1}))
+        sars = list(d.sar_drafts.find({}, {"narrative": 0}))
+        ids = list({c["_id"] for c in cases} | {s.get("ring_id") for s in sars if s.get("ring_id")})
+        q = {"$or": [{"_id": {"$in": ids}}, {"tier": "escalate"}]} if scope == "escalated" else {"_id": {"$in": ids}}
+        rings = {r["_id"]: r for r in d.rings.find(q, {"edges": 0})}
+    except PyMongoError as e:
+        raise HTTPException(503, f"database unavailable ({type(e).__name__})") from None
+    body = to_csv(case_rows(cases, sars, rings, include_escalated=scope == "escalated"))
+    name = f"fast-and-fraudless-cases-{now():%Y%m%d-%H%M}.csv"
+    return Response(body, media_type="text/csv; charset=utf-8",
+                    headers={**NO_STORE, "Content-Disposition": f'attachment; filename="{name}"'})
 
 
 # ---------------------------------------------------------------- white-label branding
