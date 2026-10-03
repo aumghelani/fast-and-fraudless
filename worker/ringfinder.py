@@ -77,9 +77,12 @@ def attempts_frame(attempts: list[dict], df: pd.DataFrame) -> pd.DataFrame:
             for i, a in enumerate(attempts) for r in a["rows"]]
     at = pd.DataFrame(recs)
     at["ts"] = pd.to_datetime(at["ts"], format="%Y/%m/%d %H:%M")
-    key = df[["ts", "src", "dst", "amount", "txn_row"]]
-    m = at.merge(key, on=["ts", "src", "dst", "amount"], how="left")
-    return m.drop_duplicates(subset=["attempt", "ts", "src", "dst", "amount"])
+    # join on integer cents: GPU and CPU float parsing differ in the last bits (E-028)
+    at["cents"] = (at["amount"] * 100).round().astype("int64")
+    key = df[["ts", "src", "dst", "amount", "txn_row"]].copy()
+    key["cents"] = (key["amount"] * 100).round().astype("int64")
+    m = at.merge(key.drop(columns=["amount"]), on=["ts", "src", "dst", "cents"], how="left")
+    return m.drop_duplicates(subset=["attempt", "ts", "src", "dst", "cents"])
 
 
 # ---------------------------------------------------------------- detection
