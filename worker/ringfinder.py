@@ -309,6 +309,28 @@ def run(args):
             "by_type": by_type, "load_s": load_s, "avg_cycle_s": float(np.mean(cycle_times)), "total_s": total}
 
 
+def run_bench(args):
+    """Same code, CPU vs GPU: load the full CSV + one detection pass over everything (trailing window at the
+    end of the data, all-time degrees over all rows). Writes meta.bench {cpu_s|gpu_s, rows}."""
+    mode = "gpu" if ON_GPU else "cpu"
+    name = os.path.basename(args.data.rstrip("/\\")).replace("ibm-aml-", "")
+    prefix = {"hi-medium": "HI-Medium", "hi-small": "HI-Small"}.get(name.lower(), name)
+    t0 = time.time()
+    df = load_transactions(os.path.join(args.data, f"{prefix}_Trans.csv"))
+    t_load = time.time() - t0
+    end = df["ts"].max()
+    win = df[df["ts"] > end - pd.Timedelta(days=args.window_days)]
+    t1 = time.time()
+    rings = detect(df, win, args.k_in, args.k_out, args.hub_max, tuple(args.formats.split(",")),
+                   not args.same_bank_ok)
+    t_detect = time.time() - t1
+    total = time.time() - t0
+    log(f"BENCH {mode}: rows={len(df):,} load={t_load:.1f}s detect={t_detect:.1f}s total={total:.1f}s rings={len(rings)}")
+    sink = Sink(None if args.dry_run else args.mongo)
+    sink.meta("bench", {"rows": int(len(df)), f"{mode}_s": round(total, 1), f"{mode}_load_s": round(t_load, 1),
+                        f"{mode}_detect_s": round(t_detect, 1)})
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", default=os.environ.get("TW_DATA", "/tw/data/ibm-aml-hi-medium"))
@@ -327,8 +349,10 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="no Mongo, no sleeping: sweep the data and print eval")
     ap.add_argument("--dry-step-hours", type=float, default=12)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--bench", action="store_true", help="time load + one full detection pass, write meta.bench")
     ap.add_argument("--reset", action="store_true", help="clear worker-owned Mongo state before replaying")
-    run(ap.parse_args())
+    a = ap.parse_args()
+    run_bench(a) if a.bench else run(a)
 
 
 if __name__ == "__main__":

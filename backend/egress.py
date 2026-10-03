@@ -59,7 +59,12 @@ def _handle(ev: dict) -> None:
         counters.inc("denied_total")
     elif is_customer_data_out(ev):
         counters.inc("customer_data_out")
-    bus.publish("egress", {k: ev[k] for k in ("ts", "verdict", "process", "dest", "policy", "reason")})
+    # Telegram's long-poll (getUpdates every ~30 s) is allowed, logged and counted, but tagged so the
+    # UI can dim it; otherwise it drowns the lines that matter in a recording.
+    poll = bool(ev.get("dest") and "api.telegram.org" in ev["dest"] and
+                ("getUpdates" in (ev.get("reason") or "") or ev.get("process", "").endswith("node")))
+    bus.publish("egress", {**{k: ev[k] for k in ("ts", "verdict", "process", "dest", "policy", "reason")},
+                           "kind": "poll" if poll else "event"})
 
 
 def _tail_forever() -> None:
