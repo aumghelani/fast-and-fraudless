@@ -228,14 +228,16 @@ def _killed(rc: int | None) -> bool:
 
 
 def run_agent(ring_id: str, reason: str = "change stream", queued_s: float = 0.0) -> None:
+    ring = db().rings.find_one({"_id": ring_id})
+    if not ring:   # stale queue entry after `ringfinder --reset`: no case doc, or the reused id never wakes
+        if _has_case(ring_id):
+            update_case(ring_id, "error: ring not found in Mongo", status="error", keep_if=_TERMINAL,
+                        retryable=False)
+        log(f"{ring_id}: ring not in Mongo; skipped")
+        return
     update_case(ring_id, f"woke via {reason} (queued {queued_s:.0f} s)", status="woke", keep_if=_TERMINAL)
     if AGENT_MODE == "inline":
         from .agent_api import case_pack   # lazy: agent_api imports this module
-        ring = db().rings.find_one({"_id": ring_id})
-        if not ring:
-            update_case(ring_id, "error: ring not found in Mongo", status="error", keep_if=_TERMINAL,
-                        retryable=False)
-            return
         prompt = INLINE_PROMPT.format(ring_id=ring_id, case=case_pack(ring))
         update_case(ring_id, "agent reading case file (inline)", status="investigating", keep_if=_TERMINAL)
     else:
@@ -381,7 +383,8 @@ def _sweep(startup: bool) -> int:
                 update_case(rid, f"error: interrupted {att} times; not resuming", status="error",
                             keep_if=_TERMINAL, retryable=False)
                 continue
-            n += _resume(rid, att + 1, "after interruption", front=True)
+            ran = c.get("status") == "investigating"   # a case still "woke" never got to run: same attempt
+            n += _resume(rid, att + ran, "after interruption", front=True)
     return n
 
 
