@@ -8,7 +8,7 @@ docker run -d --name vllm --gpus all --ipc=host --shm-size 16g --restart unless-
   -p 8000:8000 -v "$MODEL_DIR":/models/nemotron:ro \
   -e FLASHINFER_DISABLE_VERSION_CHECK=1 --entrypoint /bin/bash nvcr.io/nvidia/vllm:26.05.post1-py3 -c \
   "vllm serve /models/nemotron --served-model-name nemotron-3-nano --host 0.0.0.0 --port 8000 \
-   --max-model-len ${MAX_LEN:-16384} --gpu-memory-utilization ${GPU_UTIL:-0.35} --max-num-seqs 8 --trust-remote-code \
+   --max-model-len ${MAX_LEN:-65536} --gpu-memory-utilization ${GPU_UTIL:-0.35} --max-num-seqs 8 --trust-remote-code \
    --enable-auto-tool-choice --tool-call-parser qwen3_coder --reasoning-parser nemotron_v3 \
    --moe-backend flashinfer_cutlass --async-scheduling --kv-cache-dtype fp8"
 echo "vLLM starting (several minutes for NVFP4 shards + CUDA graphs). Watch: docker logs -f vllm"
