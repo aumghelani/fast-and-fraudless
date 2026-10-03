@@ -39,6 +39,7 @@ def _optional(module: str):
 agent_api = _optional("agent_api")
 agent_bridge = _optional("agent_bridge")
 calls = _optional("calls")
+integrations = _optional("integrations")
 
 
 def _health_loop() -> None:
@@ -69,7 +70,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Tripwire", lifespan=lifespan)
-for mod in (agent_api, calls):
+for mod in (agent_api, calls, integrations):
     if mod and hasattr(mod, "router"):
         app.include_router(mod.router)
 
