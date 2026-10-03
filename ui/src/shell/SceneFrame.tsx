@@ -15,7 +15,7 @@ export function SceneFrame({ headline, subline, actions, children }: {
     <div className="flex h-full min-h-0 flex-col px-12 pt-10 pb-6">
       <header className="mb-10 shrink-0">
         {typeof headline === 'string' ? (
-          <h1 className="text-title font-bold">{headline}</h1>
+          <h1 className="font-race text-title text-ink">{headline}</h1>
         ) : (
           headline
         )}
