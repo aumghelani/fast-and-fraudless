@@ -1,4 +1,4 @@
-"""Bank integration: ISO 20022 intake, core-banking batch ingest, branding, health (see INTEGRATION.md).
+"""Bank integration (see INTEGRATION.md): ISO 20022 intake, batch ingest, signed webhooks, SAR/case exports, branding.
 
 Everything stays on the box. Screening reuses calls.payee_check (GPU ring map) and rules.decide (code decides).
 """
