@@ -297,14 +297,15 @@ def screen_message(msg: dict, check: Optional[Callable] = None) -> dict:
 
     results = [screen_tx(t, cached) for t in msg["transactions"]]
     hits = [r for r in results if r["screening"] == "RING_MATCH"]
+    held = [r for r in results if r["hold_recommended"]]   # rules.decide said HOLD
     worst = max(results, key=lambda r: _RANK[r["screening"]])["screening"]
-    hold = True if hits else (None if worst == "UNAVAILABLE" else False)
+    hold = True if held else (None if any(r["hold_recommended"] is None for r in results) else False)
     multi = len(results) > 1
     reasons = [f"{r['end_to_end_id'] or '?'}: {x}" if multi else x for r in results for x in r["reasons"]]
     return {"message_id": msg["message_id"], "kind": msg["kind"], "version": msg["version"], "screening": worst,
             "ring_id": hits[0]["ring_id"] if hits else None, "hops": hits[0]["hops"] if hits else None,
-            "hold_recommended": hold, "recommendation": "HOLD" if hits else (None if hold is None else "NO_HOLD"),
-            "reasons": list(dict.fromkeys(reasons)), "questions": hits[0]["questions"] if hits else [],
+            "hold_recommended": hold, "recommendation": "HOLD" if held else (None if hold is None else "NO_HOLD"),
+            "reasons": list(dict.fromkeys(reasons)), "questions": held[0]["questions"] if held else [],
             "transactions": results, "warnings": msg["warnings"]}
 
 
@@ -333,13 +334,17 @@ def intake(raw: bytes, expect: str, check: Optional[Callable] = None) -> tuple:
     if prev:
         if prev.get("sha256") != sha:
             return 409, {"error": f"MsgId {msg['message_id']} was already received with different content"}
-        return 200, {**prev["result"], "duplicate": True}
+        if (prev.get("result") or {}).get("screening") != "UNAVAILABLE":   # unscreened copies are screened again
+            return 200, {**prev["result"], "duplicate": True, "persisted": True}
     result = screen_message(msg, check)
     result.update(received_at=now().isoformat(), sha256=sha, duplicate=False)
+    doc = {"_id": doc_id, "kind": msg["kind"], "message_id": msg["message_id"], "sha256": sha, "received_at": now(),
+           "message": msg, "result": dict(result), "raw_xml": raw.decode("utf-8-sig")}
     try:
-        coll.insert_one({"_id": doc_id, "kind": msg["kind"], "message_id": msg["message_id"], "sha256": sha,
-                         "received_at": now(), "message": msg, "result": dict(result),
-                         "raw_xml": raw.decode("utf-8-sig")})
+        if prev:
+            coll.replace_one({"_id": doc_id}, doc)
+        else:
+            coll.insert_one(doc)
         result["persisted"] = True
     except DuplicateKeyError:   # same message posted twice at once
         return 200, {**result, "duplicate": True, "persisted": True}

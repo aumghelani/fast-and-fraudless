@@ -54,6 +54,9 @@ class FakeColl:
             raise DuplicateKeyError("duplicate key")
         self.docs[doc["_id"]] = dict(doc)
 
+    def replace_one(self, flt, doc, upsert=False):
+        self.docs[flt["_id"]] = dict(doc)
+
     def update_one(self, flt, upd, upsert=False):
         d = self.docs.setdefault(flt["_id"], {"_id": flt["_id"]})
         d.update(upd.get("$set", {}))
@@ -242,6 +245,15 @@ def test_intake_persists_publishes_and_is_idempotent(fake):
     assert code == 409 and "different content" in err["error"]
     code, err = integ.intake(sample("pain001_example.xml"), "pacs.008")
     assert code == 422 and "pain001" in err["error"]
+
+
+def test_intake_retry_after_unavailable_is_screened_again(fake):
+    raw = sample("pacs008_margaret.xml")
+    code, body = integ.intake(raw, "pacs.008", check=lambda a, b: {"in_ring": False, "error": "ring map unavailable"})
+    assert code == 503 and body["screening"] == "UNAVAILABLE" and body["persisted"]
+    code, body = integ.intake(raw, "pacs.008")   # the payment hub retries once the ring map is back
+    assert code == 200 and body["screening"] == "RING_MATCH" and not body["duplicate"]
+    assert fake.inbound_payments.docs["pacs.008:YB-20261003-W000412"]["result"]["screening"] == "RING_MATCH"
 
 
 # ---------------------------------------------------------------- batch ingest
