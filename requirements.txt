@@ -1,0 +1,10 @@
+# backend (host venv on the box; installed offline from ~/tw/wheels/py312-aarch64)
+fastapi
+uvicorn[standard]
+pymongo
+httpx
+sse-starlette
+python-multipart
+numpy
+pandas
+soundfile
