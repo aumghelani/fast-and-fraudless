@@ -1,0 +1,9 @@
+{
+  "_comment": "White-label settings served at GET /api/integrations/branding. Override the file path with TW_BRANDING_FILE.",
+  "bank_name": "Your Bank",
+  "product_name": "Fast and Fraudless",
+  "primary_color": "#0c1016",
+  "accent_color": "#76b900",
+  "logo_path": "",
+  "timezone": "America/New_York"
+}

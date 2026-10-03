@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC demo message. David Okafor and Harbor View Rentals are fictional; a routine monthly rent wire. -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>YB-20261003-W000413</MsgId>
+      <CreDtTm>2026-10-03T10:52:30-04:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="USD">2100.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-10-03</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>YB-W000413</InstrId>
+        <EndToEndId>DAVI-RENT-2026-10</EndToEndId>
+        <UETR>3c1f8d2a-7e45-4b9c-8f21-0a6d5e9b4c38</UETR>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="USD">2100.00</IntrBkSttlmAmt>
+      <ChrgBr>SLEV</ChrgBr>
+      <Dbtr>
+        <Nm>David Okafor (fictional)</Nm>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>TW-DAVI-0001</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <Nm>Your Bank</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <Nm>Your Bank</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Harbor View Rentals (fictional)</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>TW-LAND-0001</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>rent October 2026</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC demo message. Margaret Doyle is fictional. Creditor account 802225A40 is a labelled
+     feeder account of a laundering ring in the IBM AML replay; only this wire is planted. -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>YB-20261003-W000412</MsgId>
+      <CreDtTm>2026-10-03T10:41:07-04:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="USD">40000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-10-03</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>YB-W000412</InstrId>
+        <EndToEndId>MARG-BAIL-0001</EndToEndId>
+        <UETR>e9a7c2f0-3b1d-4c55-9a0e-6d2f4b8c1a07</UETR>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="USD">40000.00</IntrBkSttlmAmt>
+      <ChrgBr>SLEV</ChrgBr>
+      <Dbtr>
+        <Nm>Margaret Doyle (fictional)</Nm>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>TW-MARG-0001</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <Nm>Your Bank</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <MmbId>021015</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Bail Bond Escrow (fictional)</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>802225A40</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>bail - grandson</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

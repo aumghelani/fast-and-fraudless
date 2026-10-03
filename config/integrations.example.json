@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy to config/integrations.json (or point TW_INTEGRATIONS_FILE at it). TW_WEBHOOKS, if set, replaces the webhook list. The signing secret comes only from the env var TW_WEBHOOK_SECRET.",
+  "webhooks": [
+    {
+      "url": "https://case-manager.bank.internal/hooks/fast-and-fraudless",
+      "events": ["hold_recommended", "sar_drafted", "sar_decided", "ring_escalated"]
+    },
+    {
+      "url": "http://10.20.30.40:8443/aml/inbound",
+      "events": ["sar_drafted", "sar_decided"]
+    }
+  ],
+  "public_base_url": "http://fraud-box.bank.internal:8790",
+  "allow_public_ips": false,
+  "max_attempts": 8,
+  "timeout_s": 5
+}
