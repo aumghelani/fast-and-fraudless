@@ -1,14 +1,14 @@
 // Fast and Fraudless: a landing hero, then one light fraud-desk page. The live call flows left to right
 // through the rules to a decision; the ring finder, the investigator agent, the proof and the results sit underneath.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { connect, useStore } from '../lib/store'
 import { DASH, num } from '../lib/format'
-import { BAR_H, EASE, Expandable, Section, useOpen } from './interact'
+import { BAR_H, EASE, Expandable, Section } from './interact'
 import { useActiveCall, useShownSar, verdictOf, VERDICT_LABEL } from './selectors'
 import { CallControlsProvider, runExfil, useCtl } from './controls'
 import { Landing } from './Landing'
-import { FocusStage } from './FocusStage'
+import { SuggestionBox } from './Suggestion'
 import { Header } from './Header'
 import { CallPanel } from './CallPanel'
 import { Pipeline } from './Pipeline'
@@ -27,6 +27,7 @@ function useShortcuts(onEnter: () => void, onHome: () => void) {
       if (e.shiftKey && e.code === 'Digit1') ctl.replay('CALL-01')
       else if (e.shiftKey && e.code === 'Digit2') ctl.replay('CALL-02')
       else if (!e.shiftKey && e.code === 'KeyM') ctl.toggleMic()
+      else if (e.shiftKey && e.code === 'KeyM') ctl.startMicCall('CALL-01')
       else if (!e.shiftKey && e.code === 'KeyE') runExfil()
       else if (e.code === 'Escape') ctl.end()
       else if (e.code === 'Enter') onEnter()
@@ -37,19 +38,6 @@ function useShortcuts(onEnter: () => void, onHome: () => void) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [ctl, onEnter, onHome])
-}
-
-function useHeight<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
-  const ref = useRef<T | null>(null)
-  const [h, setH] = useState(0)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setH(el.getBoundingClientRect().height))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-  return [ref, h]
 }
 
 function WhySummary() {
@@ -81,47 +69,58 @@ function BehindSummary() {
   )
 }
 
-const GAP = 24
+const WHY_OPEN = 480 // rules and decision panels + the label row
 const BEHIND_OPEN = 340 // 300 px of cards + the label row
+type Open = 'why' | 'behind' | null
+
+/** One detail section open at a time; whatever space is left goes to the live call. */
+function useAccordion(): [Open, (k: Exclude<Open, null>) => void] {
+  const [open, setOpen] = useState<Open>(() => {
+    try {
+      const v = localStorage.getItem('ff.acc')
+      return v === 'why' || v === 'behind' ? v : v === 'none' ? null : 'why'
+    } catch {
+      return 'why'
+    }
+  })
+  const toggle = (k: Exclude<Open, null>) =>
+    setOpen((o) => {
+      const n = o === k ? null : k
+      try {
+        localStorage.setItem('ff.acc', n ?? 'none')
+      } catch {
+        /* private mode */
+      }
+      return n
+    })
+  return [open, toggle]
+}
 
 function Desk() {
-  const [whyOpen, toggleWhy] = useOpen('why')
-  const [behindOpen, toggleBehind] = useOpen('behind')
-  const [ref, H] = useHeight<HTMLDivElement>()
-  const whyH = whyOpen ? Math.max(BAR_H, H - GAP - (behindOpen ? BEHIND_OPEN : BAR_H)) : BAR_H
-  const behindH = behindOpen ? BEHIND_OPEN : BAR_H
+  const [open, toggle] = useAccordion()
   const rise = (i: number) => ({
     initial: { opacity: 0, y: 12 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.45, ease: EASE, delay: 0.06 * i },
   })
   return (
-    <div className="dot-grid grid h-full min-h-[960px] grid-rows-[64px_auto_minmax(0,1fr)] gap-6 px-8 pb-8">
+    <div className="dot-grid grid h-full grid-rows-[64px_minmax(0,1fr)_auto] gap-6 px-8 pb-8">
       <motion.div {...rise(0)} className="min-h-0">
         <Header />
       </motion.div>
-      <motion.div {...rise(1)} className="min-h-0">
-        <CallPanel />
+      <motion.div {...rise(1)} className="flex min-h-[300px] gap-6">
+        <div className="min-w-0 flex-1">
+          <CallPanel />
+        </div>
+        <SuggestionBox />
       </motion.div>
-      <motion.div {...rise(2)} ref={ref} className="flex min-h-0 flex-col gap-6">
-        <Section title="Why this decision" summary={<WhySummary />} open={whyOpen} onToggle={toggleWhy} height={whyH}>
+      <motion.div {...rise(2)} className="flex flex-col gap-6">
+        <Section title="Why this decision" summary={<WhySummary />} open={open === 'why'} onToggle={() => toggle('why')}
+          height={open === 'why' ? WHY_OPEN : BAR_H}>
           <Pipeline />
         </Section>
-        <AnimatePresence initial={false}>
-          {!whyOpen && (
-            <motion.div
-              key="stage"
-              className="min-h-0 flex-1"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, transition: { duration: 0.15 } }}
-              transition={{ duration: 0.45, ease: EASE, delay: 0.12 }}
-            >
-              <FocusStage />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <Section title="Behind the scenes" summary={<BehindSummary />} open={behindOpen} onToggle={toggleBehind} height={behindH}>
+        <Section title="Behind the scenes" summary={<BehindSummary />} open={open === 'behind'} onToggle={() => toggle('behind')}
+          height={open === 'behind' ? BEHIND_OPEN : BAR_H}>
           <div className="grid h-full min-h-0 grid-cols-4 gap-6">
             <Expandable id="ring">
               <RingCard />
@@ -142,8 +141,22 @@ function Desk() {
   )
 }
 
+/** The page is laid out for 1920x1080; smaller screens (e.g. Windows at 125%) scale it down instead of squeezing. */
+function useFitZoom() {
+  useEffect(() => {
+    const fit = () => {
+      const z = Math.min(1, window.innerWidth / 1920, window.innerHeight / 1080)
+      document.documentElement.style.zoom = z < 0.995 ? String(z) : ''
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [])
+}
+
 function Shell() {
   const ctl = useCtl()
+  useFitZoom()
   const [entered, setEntered] = useState(false)
   const enter = () => setEntered(true)
   const home = () => setEntered(false)

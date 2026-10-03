@@ -3,9 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { animate, motion } from 'motion/react'
 import { Check as CheckIcon } from 'lucide-react'
 import type { Call } from '../../lib/types'
-import { api } from '../../lib/api'
 import { cx } from '../../lib/format'
-import { Button, Card } from '../kit'
+import { Card } from '../kit'
 import { VERDICT_LABEL, usePrefersReducedMotion, verdictOf, type Verdict } from '../selectors'
 import type { Check, CheckTone } from './checks'
 
@@ -144,30 +143,7 @@ const CHIPS: { v: Verdict; on: string }[] = [
 export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null }) {
   const reduced = usePrefersReducedMotion()
   const verdict = verdictOf(call)
-  const [pending, setPending] = useState<'hold' | 'release' | null>(null)
-  const [local, setLocal] = useState<{ id: string; d: 'hold' | 'release' } | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-  const id = call?.call_id
-  const decided = call?.banker_decision ?? (local && local.id === id ? local.d : null)
-
-  useEffect(() => {
-    setPending(null)
-    setErr(null)
-  }, [id])
-
-  const decide = async (d: 'hold' | 'release') => {
-    if (!id || pending) return
-    setPending(d)
-    setErr(null)
-    try {
-      await api.callDecision(id, d)
-      setLocal({ id, d })
-    } catch {
-      setErr('Could not save. Try again.')
-    } finally {
-      setPending(null)
-    }
-  }
+  const decided = call?.banker_decision ?? null
 
   const pos = risk ?? 0
   return (
@@ -212,34 +188,18 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
         {call?.reasons?.[0] ?? (call ? 'Listening to the call…' : '—')}
       </p>
 
-      <div className="mt-3 min-h-0 flex-1 overflow-hidden">
-        {call?.questions?.[0] && verdict && verdict !== 'NO_HOLD' && (
-          <>
-            <p className="font-mono text-[11.5px] font-medium uppercase tracking-[0.08em] text-mute">Ask the customer</p>
-            <p className="mt-1 line-clamp-2 text-[14px] leading-[21px] text-ink">{call.questions[0]}</p>
-          </>
-        )}
-      </div>
-
-      <div className="mt-3 flex h-10 shrink-0 items-center gap-3">
+      {/* the banker acts from the suggestion box; this only reports what they chose */}
+      <div className="mt-auto flex h-8 shrink-0 items-center gap-2 font-mono text-[13px] text-mute">
         {decided ? (
-          <span className="inline-flex items-center gap-2 font-mono text-[14px] text-ink">
+          <span className="inline-flex items-center gap-2 text-ink">
             <span className={cx('grid size-6 place-items-center rounded-full', decided === 'hold' ? 'bg-hold-soft text-hold' : 'bg-clear-soft text-clear')}>
               <CheckIcon size={14} strokeWidth={2.5} />
             </span>
             {decided === 'hold' ? 'Held by the banker' : 'Released by the banker'}
           </span>
-        ) : (
-          <>
-            <Button variant="hold" disabled={!call || !!pending} onClick={() => decide('hold')}>
-              {pending === 'hold' ? 'Holding…' : 'Hold wire'}
-            </Button>
-            <Button variant="ghost" disabled={!call || !!pending} onClick={() => decide('release')}>
-              {pending === 'release' ? 'Releasing…' : 'Release'}
-            </Button>
-            {err && <span className="text-[13px] text-hold">{err}</span>}
-          </>
-        )}
+        ) : verdict ? (
+          'The banker decides · see Suggestion'
+        ) : null}
       </div>
     </Card>
   )

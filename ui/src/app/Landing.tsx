@@ -1,4 +1,5 @@
 // Landing hero: one sentence, the 3-D voice bars, live proof numbers, and the way into the fraud desk.
+import { useMemo } from 'react'
 import { motion } from 'motion/react'
 import { ArrowRight, Play, ShieldCheck } from 'lucide-react'
 import { VoiceBars3D } from '../components/VoiceBars3D'
@@ -24,6 +25,14 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
   const dataOut = useStore((s) => s.counters?.customer_data_out)
   const live = useStore((s) => s.sse === 'live')
   const scanned = useStore((s) => s.tick?.tx_total ?? s.bench?.rows)
+  const rings = useStore((s) => s.rings)
+  const order = useStore((s) => s.ringOrder)
+  // real data for the hero bars: the newest rings, height = accounts in each ring
+  const ringBars = useMemo(() => {
+    const sizes = order.slice(-56).map((id) => rings[id]?.accounts?.length ?? 0).filter((n) => n > 0)
+    const max = Math.max(1, ...sizes)
+    return sizes.map((n) => n / max)
+  }, [rings, order])
   const frac = (a?: number | null, b?: number | null) => (a == null || b == null ? DASH : `${num(a)}/${num(b)}`)
   const rise = (i: number) => ({
     initial: { opacity: 0, y: 14 },
@@ -81,7 +90,10 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
           transition={{ duration: 1.2, ease: EASE, delay: 0.35 }}
           className="mt-4 w-full max-w-[1500px]"
         >
-          <VoiceBars3D active={false} orbit demo bars={56} className="h-[260px] w-full" />
+          <VoiceBars3D active={false} orbit values={ringBars} bars={56} className="h-[240px] w-full" />
+          <p className="mt-1 text-center font-mono text-[12px] text-mute">
+            {ringBars.length ? `each bar is a laundering ring the GPU found · height = accounts in the ring` : 'rings appear here as the GPU finds them'}
+          </p>
         </motion.div>
 
         <motion.div {...rise(5)} className="flex items-start gap-16">

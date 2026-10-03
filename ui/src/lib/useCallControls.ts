@@ -85,13 +85,14 @@ export function useCallControls() {
     [end],
   )
 
-  const startMicCall = useCallback(async () => {
+  // scenario: whose account the live caller speaks for (e.g. CALL-01 = Margaret's); none = a generic profile
+  const startMicCall = useCallback(async (scenario?: string) => {
     setError(null)
     if (modeRef.current !== 'idle') await end()
     setMode('starting')
     try {
       await resumeAudio()
-      const { call_id } = await api.startCall()
+      const { call_id } = await api.startCall(scenario)
       callId.current = call_id
       patchLocal({ activeCallId: call_id })
       sendChain.current = Promise.resolve()

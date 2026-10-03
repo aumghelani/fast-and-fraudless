@@ -20,9 +20,25 @@ export function sentencesOf(c?: Call): number {
   return t ? t.split(/(?<=[.!?])\s+/).filter(Boolean).length : 0
 }
 
-/** The rules' verdict, shown only after the call has been heard. */
+const textOf = (c?: Call) => `${c?.transcript_final || ''} ${c?.transcript || ''} ${c?.partial || ''}`
+const hasCue = (c: Call | undefined, k: string) => (c?.cues ?? []).some((q) => String(q?.cue).toUpperCase() === k)
+const WIRE_RE = /\b(wire|send|sending|transfer|pay)\b/i
+const AMOUNT_RE = /(\$\s?\d|\d[\d,.]*\s*(dollars|usd|k)\b|\b(hundred|thousand|million)\b)/i
+
+/** The customer has asked for a payment (heard in the words). */
+export function wireAskedOf(c?: Call): boolean {
+  return !!c && (hasCue(c, 'AMOUNT_STATED') || WIRE_RE.test(textOf(c)))
+}
+
+/** The amount has been said out loud. */
+export function amountHeardOf(c?: Call): boolean {
+  return !!c && (hasCue(c, 'AMOUNT_STATED') || AMOUNT_RE.test(textOf(c)))
+}
+
+/** The rules' verdict, shown only once the call has been heard and the payment asked for. */
 export function verdictOf(c?: Call): Verdict | null {
   if (!heardOf(c)) return null
+  if (!c?.ended && !wireAskedOf(c)) return null
   const r = c?.recommendation
   return r === 'HOLD' || r === 'VERIFY' || r === 'NO_HOLD' ? r : null
 }

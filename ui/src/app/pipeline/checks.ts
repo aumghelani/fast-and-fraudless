@@ -1,7 +1,7 @@
 // Pure mapping: a live call -> the checks, status and risk index the hero shows.
 import type { Call } from '../../lib/types'
 import { usd } from '../../lib/format'
-import { heardOf, verdictOf, type Verdict } from '../selectors'
+import { amountHeardOf, heardOf, verdictOf, wireAskedOf, type Verdict } from '../selectors'
 
 export type CheckTone = 'flag' | 'pass' | 'info'
 export interface Check { id: string; label: string; value: string; quote?: string; tone: CheckTone }
@@ -20,6 +20,8 @@ const CUE_LABEL: Record<string, string> = {
   ROUTINE_PAYEE: 'Routine payee',
 }
 
+export const cueLabel = (k: string) => (CUE_LABEL[k] ?? k.toLowerCase().replace(/_/g, ' ')).toLowerCase()
+
 const clip = (s: string, n: number) => {
   const t = s.trim()
   return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t
@@ -36,34 +38,38 @@ export function checksOf(c: Call): Check[] {
   const out: Check[] = []
   // nothing is checked on screen before the customer has spoken
   if (!heardOf(c)) return out
-  // account checks (payee ring, first wire, amount) appear once the rules have run on heard words;
-  // before that the payee check is only an empty default
-  if (c.recommendation || c.ended) accountChecks(c, out)
+  // each account check appears when its words are heard, and only after the rules have run
+  // (before that the payee check is an empty default)
+  const ran = !!c.recommendation || !!c.ended
+  if (ran) accountChecks(c, out, wireAskedOf(c) || !!c.ended, amountHeardOf(c) || !!c.ended)
   cueChecks(c, out)
   return out
 }
 
-function accountChecks(c: Call, out: Check[]) {
+function accountChecks(c: Call, out: Check[], asked: boolean, amount: boolean) {
   const pc = c.payee_check
-  const label = 'Payee in GPU ring map'
-  if (!pc || Object.keys(pc).length === 0) out.push({ id: 'ring', label, value: 'Checking…', tone: 'info' })
-  else if (pc.error) out.push({ id: 'ring', label, value: 'Map unavailable', tone: 'info' })
-  else if (pc.in_ring)
-    out.push({
-      id: 'ring', label, tone: 'flag',
-      value: `${pc.ring_id ?? 'ring'}${pc.hops != null ? ` · ${pc.hops} hop${pc.hops === 1 ? '' : 's'}` : ''}`,
-    })
-  else out.push({ id: 'ring', label, value: 'Not linked', tone: 'pass' })
+  if (asked) {
+    const label = 'Payee in GPU ring map'
+    if (!pc || Object.keys(pc).length === 0) out.push({ id: 'ring', label, value: 'Checking…', tone: 'info' })
+    else if (pc.error) out.push({ id: 'ring', label, value: 'Map unavailable', tone: 'info' })
+    else if (pc.in_ring)
+      out.push({
+        id: 'ring', label, tone: 'flag',
+        value: `${pc.ring_id ?? 'ring'}${pc.hops != null ? ` · ${pc.hops} hop${pc.hops === 1 ? '' : 's'}` : ''}`,
+      })
+    else out.push({ id: 'ring', label, value: 'Not linked', tone: 'pass' })
 
-  const prior = c.customer?.prior_wires
-  const first = c.features?.first_wire ?? (prior != null ? prior === 0 : null)
-  out.push(
-    first == null
-      ? { id: 'first', label: 'First wire', value: '—', tone: 'info' }
-      : first
-        ? { id: 'first', label: 'First wire', value: 'First ever', tone: 'flag' }
-        : { id: 'first', label: 'First wire', value: prior != null ? `${prior} before` : 'No', tone: 'pass' },
-  )
+    const prior = c.customer?.prior_wires
+    const first = c.features?.first_wire ?? (prior != null ? prior === 0 : null)
+    out.push(
+      first == null
+        ? { id: 'first', label: 'First wire', value: '—', tone: 'info' }
+        : first
+          ? { id: 'first', label: 'First wire', value: 'First ever', tone: 'flag' }
+          : { id: 'first', label: 'First wire', value: prior != null ? `${prior} before` : 'No', tone: 'pass' },
+    )
+  }
+  if (!amount) return
 
   const typical = c.customer?.typical_monthly_outflow_usd
   const ratio = c.features?.amount_ratio ?? (c.amount != null && typical ? c.amount / typical : null)

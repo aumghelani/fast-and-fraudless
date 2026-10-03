@@ -1,6 +1,5 @@
-// 3-D voice bars: a gentle arc of bars that rise with the caller's voice (mic or replay audio).
-// Calm by design: soft light, one colour that follows the verdict. `demo` gives a slow voice-like wave
-// for the landing hero; without it, idle bars just breathe.
+// 3-D voice bars: an arc of bars that rise with the caller's real voice (mic or replay audio).
+// No made-up motion: silent means flat. `values` shows real numbers instead (e.g. ring sizes on the landing page).
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { getAnalyser } from '../lib/audio'
@@ -25,19 +24,19 @@ function cssColor(name: string, fallback: string) {
   return new THREE.Color(v || fallback)
 }
 
-export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = false, demo = false, className }: {
+export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = false, values, className }: {
   active: boolean
   tone?: Bars3DTone
   bars?: number
   /** slow camera sway so the depth reads */
   orbit?: boolean
-  /** voice-like wave while no call is live (landing hero) */
-  demo?: boolean
+  /** real numbers (0..1) to show while no call is live */
+  values?: number[]
   className?: string
 }) {
   const host = useRef<HTMLDivElement>(null)
-  const live = useRef({ active, tone, orbit, demo })
-  live.current = { active, tone, orbit, demo }
+  const live = useRef({ active, tone, orbit, values })
+  live.current = { active, tone, orbit, values }
   const reduced = usePrefersReducedMotion()
 
   useEffect(() => {
@@ -113,7 +112,8 @@ export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = fal
       if (reduced && now - last < 120) return
       last = now
       const t = (now - t0) / 1000
-      const { active: on, tone: tn, orbit: sway, demo: wave } = live.current
+      const { active: on, tone: tn, orbit: sway, values: vals } = live.current
+      const wave = !!vals && vals.length > 0
       if (sway && !reduced) place(0.2 * Math.sin(t * 0.22))
       if (on || wave) target.copy(cssColor(TONE_VAR[on ? tn : 'listening'], '#4f46e5'))
       else target.copy(cssColor(TONE_VAR.listening, '#4f46e5')).lerp(white, 0.62) // idle: soft lavender
@@ -128,13 +128,10 @@ export function VoiceBars3D({ active, tone = 'listening', bars = 48, orbit = fal
         if (on && analyser) {
           const bin = Math.floor((1 - k) * band * 0.9)
           goal = Math.pow(freq[bin] / 255, 1.3) * MAX_H
-        } else if (wave && !reduced) {
-          // slow, speech-like envelope: two drifting waves, louder in the middle
-          const a = 0.5 + 0.5 * Math.sin(t * 1.9 + u * 9.5)
-          const b = 0.5 + 0.5 * Math.sin(t * 0.63 - u * 4.1)
-          goal = (0.18 + 1.6 * a * b) * (1 - 0.65 * k * k)
+        } else if (wave) {
+          goal = 0.1 + Math.max(0, Math.min(1, vals![i % vals!.length])) * MAX_H * 0.9
         } else {
-          goal = (0.22 + 0.12 * (0.5 + 0.5 * Math.sin(t * 1.1 - u * 5.5))) * (1 - 0.4 * k * k)
+          goal = 0.1 // silence: flat
         }
         goal = Math.max(0.08, goal)
         heights[i] += (goal - heights[i]) * (goal > heights[i] ? 0.35 : 0.1)
