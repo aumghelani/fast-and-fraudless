@@ -359,12 +359,13 @@ def _sweep(startup: bool) -> int:
     cur = db().cases.find({"status": {"$in": ["woke", "investigating", "error"]}},
                           {"status": 1, "attempts": 1, "fails": 1, "retry_at_ms": 1, "retryable": 1,
                            "interrupted": 1, "timeline": {"$slice": -1}})
-    for c in list(cur):
+    last_ts = lambda c: int(((c.get("timeline") or [{}])[-1] or {}).get("ts") or 0)   # noqa: E731
+    for c in sorted(cur, key=last_ts, reverse=True):   # most recent work first (FIFO among equal priority)
         rid = c["_id"]
         if _busy(rid):
             continue
         att, fails = int(c.get("attempts") or 0), int(c.get("fails") or 0)
-        last = int(((c.get("timeline") or [{}])[-1] or {}).get("ts") or 0)
+        last = last_ts(c)
         if c.get("status") == "error":
             if c.get("retryable") is False or fails > RESUME_MAX:
                 continue
