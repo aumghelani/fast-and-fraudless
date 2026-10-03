@@ -99,7 +99,7 @@ function Desk() {
   const vh = useViewportH()
   // the details take a share of the window; the replay row always keeps the rest (never less than ~40%)
   const whyOpen = Math.round(clamp(vh * 0.34, 200, 420)) // queue, proof and decision + label row
-  const behindOpen = Math.round(clamp(vh * 0.32, 190, 340)) // metric cards + label row
+  const behindOpen = Math.round(clamp(vh * 0.42, 250, 380)) // metric cards + label row (the other section is closed then)
   const rise = (i: number) => ({
     initial: { opacity: 0, y: 12 },
     animate: { opacity: 1, y: 0 },

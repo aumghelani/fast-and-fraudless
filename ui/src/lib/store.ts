@@ -304,18 +304,12 @@ export function patchLocal(p: Partial<State>) {
   set(p)
 }
 
-/** The call on screen: the one this UI started or picked, else a call that is live right now.
- *  Old, finished calls are never shown on their own: idle means empty. */
+/** The call on screen: only the one this page started, or a wire picked in the queue.
+ *  Calls from other pages are never shown, and a refresh starts empty. */
 export function useActiveCall() {
   const calls = useStore((s) => s.calls)
   const id = useStore((s) => s.activeCallId)
-  if (id && calls[id]) return calls[id]
-  let best: (typeof calls)[string] | undefined
-  for (const c of Object.values(calls)) {
-    if (c.ended) continue
-    if (!best || String(c.started_at || '') > String(best.started_at || '')) best = c
-  }
-  return best
+  return id ? calls[id] : undefined
 }
 
 // dev-only hooks so visual states can be checked from a headless browser; stripped from builds

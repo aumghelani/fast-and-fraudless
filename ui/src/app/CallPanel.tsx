@@ -114,12 +114,8 @@ export function CallPanel() {
   const live = ctlLive || (!!call && !call.ended && remote)
   const starting = ctl.mode === 'starting'
 
-  // only a call this page saw live gets the "ended" view; old calls in the store leave the line ready
-  const [seen, setSeen] = useState<string | null>(null)
-  useEffect(() => {
-    if (live && call?.call_id) setSeen(call.call_id)
-  }, [live, call?.call_id])
-  const view: View = starting ? 'starting' : live ? 'live' : call && seen === call.call_id ? 'ended' : 'idle'
+  // the page only ever holds its own call (or a wire picked in the queue): not live means ended
+  const view: View = starting ? 'starting' : live ? 'live' : call ? 'ended' : 'idle'
 
   // timer: the call's own audio clock, nudged by the wall clock between updates
   const now = useNow(live)
@@ -143,97 +139,76 @@ export function CallPanel() {
 
   return (
     <GlowCard tone={glow} pulsing={view === 'live'} className="flex h-full min-h-0 min-w-0 flex-col" data-block="replay">
-      {/* who is on the line, and the controls */}
-      <div className="flex shrink-0 flex-wrap items-start gap-x-6 gap-y-3 px-5 pt-4">
-        <div className="flex min-w-[240px] flex-1 flex-col gap-1">
-          <div className="flex h-7 items-center gap-2">
-            {view === 'live' && (
-              <>
-                <Pill tone="accent" className="py-0.5 text-[13px] tracking-[0.08em]">
-                  <PulseDot className="bg-accent" still={still} />
-                  LIVE
-                </Pill>
-                <span className="tnum font-mono text-[16px] font-medium text-ink">{clock}</span>
-                {v && (
-                  <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-                    <Pill tone={VERDICT_TONE[v]} className="py-0.5 text-[13px]">{VERDICT_LABEL[v]}</Pill>
-                  </motion.span>
-                )}
-              </>
-            )}
-            {view === 'ended' && (
-              <>
-                <span className="font-mono text-[14px] text-mute">Call ended ·</span>
-                {v ? (
-                  <Pill tone={VERDICT_TONE[v]} className="py-0.5 text-[13px]">{VERDICT_LABEL[v]}</Pill>
-                ) : (
-                  <Pill className="py-0.5 text-[13px]">No verdict</Pill>
-                )}
-                <span className="tnum font-mono text-[14px] text-mute">{clock}</span>
-              </>
-            )}
-            {view === 'starting' && (
-              <Pill tone="accent" className="py-0.5 text-[13px] tracking-[0.08em]">
-                <PulseDot className="bg-accent" still={still} />
-                CONNECTING
-              </Pill>
-            )}
-            {view === 'idle' && (
-              <Pill className="py-0.5 text-[13px] tracking-[0.08em]">
-                <span aria-hidden className="size-2 rounded-full bg-faint" />
-                NO CALL
-              </Pill>
-            )}
-          </div>
-          <div className="flex min-w-0 items-baseline gap-3">
-            <span className="truncate font-mono text-[18px] font-semibold text-ink">
-              {showCall ? name : view === 'starting' ? 'Dialling in…' : 'Ready for the next call'}
+      {/* one fixed row: who is on the line (left) and the four call buttons (right), the same in every state */}
+      <div className="flex h-[68px] shrink-0 items-center gap-5 px-5">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 whitespace-nowrap">
+          {view === 'live' && (
+            <Pill tone="accent" className="shrink-0 py-0.5 text-[13px] tracking-[0.08em]">
+              <PulseDot className="bg-accent" still={still} />
+              LIVE
+            </Pill>
+          )}
+          {view === 'starting' && (
+            <Pill tone="accent" className="shrink-0 py-0.5 text-[13px] tracking-[0.08em]">
+              <PulseDot className="bg-accent" still={still} />
+              CONNECTING
+            </Pill>
+          )}
+          {view === 'ended' && <Pill className="shrink-0 py-0.5 text-[13px]">Call ended</Pill>}
+          {view === 'idle' && (
+            <Pill className="shrink-0 py-0.5 text-[13px] tracking-[0.08em]">
+              <span aria-hidden className="size-2 rounded-full bg-faint" />
+              NO CALL
+            </Pill>
+          )}
+          {showCall && <span className="tnum shrink-0 font-mono text-[16px] font-medium text-ink">{clock}</span>}
+          {showCall && v && <Pill tone={VERDICT_TONE[v]} className="shrink-0 py-0.5 text-[13px]">{VERDICT_LABEL[v]}</Pill>}
+          <span className="min-w-0 truncate font-mono text-[18px] font-semibold text-ink">
+            {showCall ? name : view === 'starting' ? 'Dialling in…' : 'Ready for the next call'}
+          </span>
+          {err ? (
+            <span className="min-w-0 truncate font-mono text-[13px] text-hold" title={ctl.error ?? undefined}>{err}</span>
+          ) : (
+            <span className="min-w-0 truncate font-mono text-[14px] text-mute">
+              {showCall ? <>{sourceOf(call, ctl.mode)}{call?.amount != null && <> · wire {usd(call.amount)}</>}</> : 'speech stays on the GB10'}
             </span>
-            {err ? (
-              <span className="truncate font-mono text-[13px] text-hold" title={ctl.error ?? undefined}>{err}</span>
-            ) : (
-              <span className="truncate font-mono text-[13px] text-mute">
-                {showCall ? <>{sourceOf(call, ctl.mode)}{call?.amount != null && <> · wire {usd(call.amount)}</>}</> : 'Line open · speech stays on the GB10'}
-              </span>
-            )}
-          </div>
+          )}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2.5">
-          <Button className="px-3.5 text-[15px]" disabled={starting} onClick={() => ctl.replay('CALL-01')}>
-            <Play size={13} className="text-mute" fill="currentColor" strokeWidth={0} />
-            Margaret · replay
+        <div className="flex shrink-0 items-center gap-2">
+          <Button className="px-3 text-[15px]" disabled={starting} onClick={() => ctl.replay('CALL-01')}>
+            <Play size={12} className="text-mute" fill="currentColor" strokeWidth={0} />
+            Margaret
             <Kbd>⇧1</Kbd>
           </Button>
-          <Button className="px-3.5 text-[15px]" disabled={starting} onClick={() => ctl.replay('CALL-02')}>
-            <Play size={13} className="text-mute" fill="currentColor" strokeWidth={0} />
-            David · replay
+          <Button className="px-3 text-[15px]" disabled={starting} onClick={() => ctl.replay('CALL-02')}>
+            <Play size={12} className="text-mute" fill="currentColor" strokeWidth={0} />
+            David
             <Kbd>⇧2</Kbd>
           </Button>
+          <Button className="px-3 text-[15px]" disabled={starting} onClick={() => ctl.startMicCall('CALL-01')}>
+            <Mic size={15} className="text-accent" />
+            Live as Margaret
+            <Kbd>⇧M</Kbd>
+          </Button>
+          {/* same place, same width: Live call before, End call during */}
           {ctlLive || starting ? (
-            <Button variant="hold" className="justify-center px-3.5 text-[15px]" onClick={() => ctl.end()}>
+            <Button variant="hold" className="w-[148px] justify-center px-3 text-[15px]" onClick={() => ctl.end()}>
               <PhoneOff size={15} />
               End call
               <KbdOn>Esc</KbdOn>
             </Button>
           ) : (
-            <>
-              <Button className="justify-center px-3.5 text-[15px]" onClick={() => ctl.startMicCall('CALL-01')}>
-                <Mic size={15} className="text-accent" />
-                Live · Margaret's account
-                <Kbd>⇧M</Kbd>
-              </Button>
-              <Button variant="primary" className="justify-center px-3.5 text-[15px]" onClick={() => ctl.toggleMic()}>
-                <Mic size={15} />
-                Live call
-                <KbdOn>M</KbdOn>
-              </Button>
-            </>
+            <Button variant="primary" className="w-[148px] justify-center px-3 text-[15px]" onClick={() => ctl.toggleMic()}>
+              <Mic size={15} />
+              Live call
+              <KbdOn>M</KbdOn>
+            </Button>
           )}
         </div>
       </div>
 
       {/* ring | transcript | rules, edge to edge */}
-      <div className="flex min-h-0 flex-1 items-stretch gap-4 px-4 pb-4 pt-3">
+      <div className="flex min-h-0 flex-1 items-stretch gap-4 px-4 pb-4 pt-1">
         <div className="relative aspect-square h-full max-h-[min(420px,34vh)] shrink-0 self-center max-[1450px]:max-h-[min(240px,34vh)]">
           <VoiceRing3D active={view === 'live'} tone={tone} tilt={0.42} bars={96} className="absolute inset-0">
             <PhoneMark live={view === 'live'} still={still} />

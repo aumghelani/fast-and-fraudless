@@ -1,7 +1,7 @@
 // Rules & Checks (each check rises in, a scan bar sweeps it and fills it green or red) and the Decision.
 import { useEffect, useRef, useState } from 'react'
 import { animate, motion } from 'motion/react'
-import { Check as CheckIcon } from 'lucide-react'
+import { Check as CheckIcon, ListChecks } from 'lucide-react'
 import type { Call } from '../../lib/types'
 import { cx } from '../../lib/format'
 import { Card, GlowCard } from '../kit'
@@ -56,17 +56,12 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
     <Card bar title="Rules & Checks" right={!call ? '—' : checks.length ? `${flagged} of ${checks.length} flagged` : 'listening…'} className="h-full"
       bodyClassName="relative px-4 py-4 [@media(max-height:780px)]:py-2">
       {!call || checks.length === 0 ? (
-        <div className="flex h-full min-h-0 flex-col justify-center-safe gap-3 overflow-hidden px-2">
-          {[0, 1, 2, 3].map((i) => (
-            // placeholder rows; the last two drop out on short screens
-            <div key={i} className={cx('flex shrink-0 items-center gap-3 opacity-60', i > 1 && '[@media(max-height:860px)]:hidden')}>
-              <span className="size-2 rounded-full bg-line-2" />
-              <span className="h-2.5 rounded-full bg-surface-2" style={{ width: `${46 - i * 6}%` }} />
-              <span className="ml-auto h-2.5 w-16 rounded-full bg-surface-2" />
-            </div>
-          ))}
-          <p className="mt-3 text-center font-mono text-[14px] text-mute">
-            {!call ? 'Waiting for the next wire…' : call.ended ? 'Call ended before any words were heard' : 'Listening… checks appear as the customer speaks'}
+        <div className="flex h-full min-h-0 flex-col items-center justify-center-safe gap-2 overflow-hidden px-4 text-center">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-accent-soft text-accent [@media(max-height:700px)]:hidden">
+            <ListChecks size={20} strokeWidth={2} />
+          </span>
+          <p className="font-mono text-[14px] leading-snug text-mute">
+            {!call ? 'Waiting for the next wire' : call.ended ? 'Call ended before any words were heard' : 'Listening… each check appears when its words are heard'}
           </p>
         </div>
       ) : (

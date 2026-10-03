@@ -24,7 +24,7 @@ export function AgentCard() {
   )
 
   return (
-    <Card title="Investigator agent" right="OpenShell sandbox" className="h-full" bodyClassName="flex flex-col px-5 pb-4 pt-3">
+    <Card title="Investigator agent" right="OpenShell sandbox" className="h-full" bodyClassName="flex min-h-0 flex-col px-5 pb-4 pt-3">
       {!sar ? (
         <div className="flex min-h-0 flex-1 flex-col justify-center-safe gap-2 overflow-hidden">
           <p className="text-[16px] text-ink-2">Waiting for an escalated ring…</p>
@@ -44,7 +44,7 @@ export function AgentCard() {
             )}
           </div>
 
-          <ol className="mt-2.5 flex flex-col gap-1">
+          <ol className="mt-2.5 flex min-h-0 flex-1 flex-col justify-end gap-1 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,#000_14px)]">
             {steps.length === 0 && <li className="font-mono text-[13px] text-mute">{DASH}</li>}
             <AnimatePresence initial={false}>
               {steps.map((s, i) => {
@@ -80,7 +80,7 @@ function Citations({ sar }: { sar: Sar }) {
   const { cites, total, valid, invalid } = citationCheck(sar)
   const ids = cites.filter((c) => c.txn_id).slice(0, 4)
   return (
-    <div className="mt-2.5 flex flex-col gap-2 border-t border-line pt-2.5">
+    <div className="mt-2.5 flex shrink-0 flex-col gap-2 border-t border-line pt-2.5">
       <div className="flex items-center gap-2 font-mono text-[14px] text-ink">
         {total > 0 && invalid === 0 ? (
           <Check className="h-4 w-4 text-clear" strokeWidth={2.5} aria-hidden />
