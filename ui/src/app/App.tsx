@@ -97,15 +97,16 @@ function useAccordion(): [Open, (k: Exclude<Open, null>) => void] {
 function Desk() {
   const [open, toggle] = useAccordion()
   const vh = useViewportH()
-  const whyOpen = Math.round(clamp(vh * 0.35, 280, 420)) // queue, proof and decision + label row
-  const behindOpen = Math.round(clamp(vh * 0.34, 250, 340)) // metric cards + label row
+  // the details take a share of the window; the replay row always keeps the rest (never less than ~40%)
+  const whyOpen = Math.round(clamp(vh * 0.34, 200, 420)) // queue, proof and decision + label row
+  const behindOpen = Math.round(clamp(vh * 0.32, 190, 340)) // metric cards + label row
   const rise = (i: number) => ({
     initial: { opacity: 0, y: 12 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.45, ease: EASE, delay: 0.06 * i },
   })
   return (
-    <div className="dot-grid grid h-full min-h-[800px] grid-cols-[minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)_auto] gap-4 overflow-x-hidden px-6 pb-5">
+    <div className="dot-grid grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)_auto] gap-4 overflow-hidden px-6 pb-5">
       <motion.div {...rise(0)} data-block="header" className="min-h-0 min-w-0">
         <Header />
       </motion.div>

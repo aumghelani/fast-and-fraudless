@@ -41,7 +41,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
   })
 
   return (
-    <div className="dot-grid relative flex h-full min-h-[900px] flex-col overflow-hidden px-12 pb-10">
+    <div className="dot-grid relative flex h-full flex-col overflow-hidden px-12 pb-6">
       <header className="flex h-20 shrink-0 items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="grid size-9 place-items-center rounded-xl bg-accent text-white">
@@ -59,16 +59,16 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
         <motion.span {...rise(0)} className="mb-6 inline-flex items-center gap-2 rounded-full bg-accent-soft px-4 py-1.5 font-mono text-[13px] text-accent">
           Dell Pro Max GB10 · runs inside the bank
         </motion.span>
-        <motion.h1 {...rise(1)} className="max-w-[1100px] text-[72px] font-semibold leading-[1.05] tracking-[-0.025em] text-ink">
+        <motion.h1 {...rise(1)} className="max-w-[1100px] text-[clamp(40px,7vh,72px)] font-semibold leading-[1.05] tracking-[-0.025em] text-ink">
           Stop the scam wire
           <br />
           <span className="text-ink-2">while they're still on the phone.</span>
         </motion.h1>
-        <motion.p {...rise(2)} className="mt-6 max-w-[760px] text-[20px] leading-[1.6] text-ink-2">
+        <motion.p {...rise(2)} className="mt-[2.2vh] max-w-[760px] text-[clamp(16px,2vh,20px)] leading-[1.6] text-ink-2">
           It listens to the call, checks the payee against laundering rings found on the GPU, and tells the banker what to
           ask. Every model runs on one box. Nothing leaves it.
         </motion.p>
-        <motion.div {...rise(3)} className="mt-9 flex items-center gap-3">
+        <motion.div {...rise(3)} className="mt-[3vh] flex items-center gap-3">
           <Button variant="primary" className="h-12 px-6 text-[16px]" onClick={onEnter}>
             Open the fraud desk <ArrowRight className="size-4" /> <Kbd>⏎</Kbd>
           </Button>
@@ -88,9 +88,9 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1.2, ease: EASE, delay: 0.35 }}
-          className="mt-4 w-full max-w-[1500px]"
+          className="mt-[1.5vh] flex min-h-0 w-full max-w-[1500px] flex-1 flex-col"
         >
-          <VoiceBars3D active={false} orbit values={ringBars} bars={56} className="h-[240px] w-full" />
+          <VoiceBars3D active={false} orbit values={ringBars} bars={56} className="min-h-[90px] w-full flex-1" />
           <p className="mt-1 text-center font-mono text-[12px] text-mute">
             {ringBars.length ? `each bar is a laundering ring the GPU found · height = accounts in the ring` : 'rings appear here as the GPU finds them'}
           </p>

@@ -54,7 +54,7 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
   }, [shown, reduced])
   return (
     <Card bar title="Rules & Checks" right={!call ? '—' : checks.length ? `${flagged} of ${checks.length} flagged` : 'listening…'} className="h-full"
-      bodyClassName="relative px-4 py-4">
+      bodyClassName="relative px-4 py-4 [@media(max-height:780px)]:py-2">
       {!call || checks.length === 0 ? (
         <div className="flex h-full flex-col justify-center gap-3 px-2">
           {[0, 1, 2, 3].map((i) => (
@@ -119,7 +119,7 @@ export function RulesPanel({ call, checks }: { call?: Call; checks: Check[] }) {
             </motion.li>
           ))}
         </ul>
-        <div className="mt-2 flex shrink-0 items-center justify-between border-t border-line px-3 pt-2.5 font-mono text-[13px] text-mute">
+        <div className="mt-2 flex shrink-0 items-center justify-between border-t border-line px-3 pt-2.5 font-mono text-[13px] text-mute [@media(max-height:780px)]:hidden">
           <span className="flex items-center gap-2">
             <span className={cx('size-1.5 rounded-full', verdictOf(call) ? 'bg-clear' : call.ended ? 'bg-faint' : 'bg-accent')} />
             {verdictOf(call) ? 'All checks read' : call.ended ? 'Call ended' : 'Reading the call…'}
@@ -177,12 +177,12 @@ export function DecisionPanel({ call, risk }: { call?: Call; risk: number | null
     <GlowCard tone={tone} pulsing={!!call && !call.ended} className="h-full">
     <Card bar barClass={bar} title="Decision" right="rules decide, not the model" className="h-full" bodyClassName="flex min-h-0 flex-col px-6 pb-4 pt-3">
       <div className="flex items-baseline gap-2 font-mono">
-        <span className={cx('inline-block w-[2ch] text-right text-[48px] leading-none tnum', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : ink, 'transition-colors duration-500')}>
+        <span className={cx('inline-block w-[2ch] text-right text-[48px] leading-none tnum [@media(max-height:780px)]:text-[38px]', risk != null && 'font-semibold', risk == null ? 'font-light text-faint' : ink, 'transition-colors duration-500')}>
           {risk == null ? '—' : <Ticker value={risk} reduced={reduced} />}
         </span>
         <span className="text-[24px] text-mute">/100</span>
       </div>
-      <p className="mt-1.5 font-mono text-[13px] text-mute">risk index from rule hits</p>
+      <p className="mt-1.5 font-mono text-[13px] text-mute [@media(max-height:780px)]:hidden">risk index from rule hits</p>
 
       <div className="mt-3 flex gap-2">
         {CHIPS.map(({ v, on }) => (

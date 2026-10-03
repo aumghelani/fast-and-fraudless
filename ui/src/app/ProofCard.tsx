@@ -34,7 +34,7 @@ export function ProofCard() {
       <div className="flex shrink-0 items-center gap-5">
         <span
           className={cx(
-            'tnum font-mono text-[52px] font-semibold leading-none tracking-tight',
+            'tnum font-mono text-[52px] font-semibold leading-none tracking-tight [@media(max-height:780px)]:text-[40px]',
             out == null ? 'text-faint' : out === 0 ? 'text-clear' : 'text-hold',
           )}
         >
@@ -46,7 +46,7 @@ export function ProofCard() {
         </div>
       </div>
 
-      <div className="mt-3 grid shrink-0 grid-cols-2 gap-4 border-t border-line pt-2.5">
+      <div className="mt-3 grid shrink-0 grid-cols-2 gap-4 border-t border-line pt-2.5 [@media(max-height:700px)]:hidden">
         <Stat value={num(deniedTotal)} label="denied attempts" />
         <Stat value={num(rec)} aside={lastRec ? `last ${hhmm(lastRec)}` : undefined} label={`automatic ${rec === 1 ? 'recovery' : 'recoveries'}`} />
       </div>
